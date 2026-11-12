@@ -7,7 +7,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
 
 export function DestructionSettings() {
-  const lock = useLock(), { t } = useLanguage(), c = useColors();
+  const lock = useLock(), { t, errorMessage } = useLanguage(), c = useColors();
   const [verified, setVerified] = useState(false), [ack, setAck] = useState(false);
   const [secret, setSecret] = useState(''), [confirm, setConfirm] = useState(''), [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -24,7 +24,7 @@ export function DestructionSettings() {
     <Btn label={t('Enable destruction secret')} variant="danger" disabled={!ack || !secret || secret !== confirm || busy} loading={busy} onPress={async () => {
       setBusy(true);
       try { await lock.setDestruction(secret); setSecret(''); setConfirm(''); setVerified(false); }
-      catch (e) { setError(t(e instanceof Error ? e.message : 'Could not save.')); }
+      catch (e) { setError(errorMessage(e instanceof Error ? e.message : 'Could not save.')); }
       finally { setBusy(false); }
     }} />
     {lock.destructionEnabled ? <Btn label={t('Disable destruction secret')} variant="soft" onPress={async () => { await lock.setDestruction(''); setVerified(false); }} /> : null}

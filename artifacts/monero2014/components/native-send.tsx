@@ -15,7 +15,7 @@ import { nativeEngine, type NativeQuote } from '@/lib/native-engine';
 
 const xmrInput = (atomic: bigint) => formatXmr(atomic, 12, 0).replace(/,/g, '');
 export function NativeSend() {
-  const c = useColors(), ins = useInsets(), { t } = useLanguage();
+  const c = useColors(), ins = useInsets(), { t, errorMessage } = useLanguage();
   const { available, sync, reload, state } = useWallet(), lock = useLock();
   const [address, setAddress] = useState(''), [amount, setAmount] = useState('');
   const [fiatMode, setFiatMode] = useState(false);
@@ -46,7 +46,7 @@ export function NativeSend() {
         setAmount(fiatMode && rate ? centsToString(fiatCents(BigInt(prepared.amount), rate)) : xmrInput(BigInt(prepared.amount)));
       } else setQuote(prepared);
     } catch (e) {
-      setError(t(e instanceof Error ? e.message : 'Could not prepare payment.'));
+      setError(errorMessage(e instanceof Error ? e.message : 'Could not prepare payment.'));
       await nativeEngine().discard().catch(() => undefined);
     } finally { once.current = false; setBusy(false); }
   };
@@ -57,14 +57,14 @@ export function NativeSend() {
       const txid = await nativeEngine().commit(quote.token);
       setQuote(null); reload(); router.replace({ pathname: '/(tabs)/activity', params: { sent: txid } });
     } catch (e) {
-      setError(t(e instanceof Error ? e.message : 'Broadcast outcome unknown. Do not retry.'));
+      setError(errorMessage(e instanceof Error ? e.message : 'Broadcast outcome unknown. Do not retry.'));
       setUncertain(true);
     } finally { once.current = false; setBusy(false); }
   };
   const cancel = async () => {
     setBusy(true);
     try { await nativeEngine().discard(); setQuote(null); setMaxQuote(null); }
-    catch (e) { setError(t(e instanceof Error ? e.message : 'Could not cancel review.')); }
+    catch (e) { setError(errorMessage(e instanceof Error ? e.message : 'Could not cancel review.')); }
     finally { setBusy(false); }
   };
   const scan = async () => {
@@ -124,7 +124,7 @@ export function NativeSend() {
           if (scanned.current) return;
           scanned.current = true; setCamera(false);
           try { const payment = readPaymentQr(data); changeAddress(payment.address); if (payment.amount) { setFiatMode(false); changeAmount(payment.amount); } }
-          catch (e) { setError(t(e instanceof Error ? e.message : 'Invalid QR code.')); }
+          catch (e) { setError(errorMessage(e instanceof Error ? e.message : 'Invalid QR code.')); }
         }} /> : null}
         <View style={{ padding: 24, paddingBottom: ins.bottom + 24 }}><Btn label={t('Cancel')} onPress={() => setCamera(false)} /></View>
       </View>

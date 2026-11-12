@@ -1,4 +1,5 @@
-import { router, Stack } from 'expo-router';
+import { Redirect, router, Stack } from 'expo-router';
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
 import React, { useState } from 'react';
 import { Platform, Text, View } from 'react-native';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
@@ -106,6 +107,7 @@ function TestHub() {
 }
 
 export default function TestScreen() {
+  if (IS_NATIVE_ANDROID) return <Redirect href="/" />;
   return (
     <WalletGate>
       <TestHub />

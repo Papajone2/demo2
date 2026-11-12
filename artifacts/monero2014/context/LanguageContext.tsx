@@ -5,14 +5,12 @@ import AppStorage from '@/lib/app-storage';
 import { isLanguageCode, LANGUAGE_STORAGE_KEY, type LanguageCode, resolveDeviceLanguage, SUPPORTED_LANGUAGES } from '@/lib/languages';
 import { CATALOGS } from '@/locales';
 import { errorKey } from '@/lib/wallet-errors';
+import { translateText, type TranslationValues } from '@/lib/translation';
+export { interpolate } from '@/lib/translation';
 
-type Values = Record<string, string | number>;
+type Values = TranslationValues;
 /** Marks a string literal as translatable source copy (translated later with t()). */
 export const msg = (s: string) => s;
-
-export function interpolate(s: string, v?: Values) {
-  return v ? s.replace(/\{(\w+)\}/g, (m, k: string) => (k in v ? String(v[k]) : m)) : s;
-}
 
 type Ctx = {
   language: LanguageCode;
@@ -20,16 +18,16 @@ type Ctx = {
   /** Applies immediately; rejects only if persisting the choice failed. */
   setLanguage: (code: LanguageCode) => Promise<void>;
   t: (source: string, values?: Values) => string;
+  errorMessage: (source: string) => string;
 };
 
 const translate = (lang: LanguageCode) => (source: string, values?: Values) => {
   const cat = CATALOGS[lang];
-  const key = cat?.[source] ? source : errorKey(source);
-  return interpolate((cat && cat[key]) || key, values);
+  return translateText(cat, source, values);
 };
 
 const LanguageContext = createContext<Ctx>({
-  language: 'en', languageName: 'English', setLanguage: async () => {}, t: translate('en'),
+  language: 'en', languageName: 'English', setLanguage: async () => {}, t: translate('en'), errorMessage: source => errorKey(source),
 });
 
 function deviceLanguage(): LanguageCode {
@@ -63,6 +61,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     languageName: SUPPORTED_LANGUAGES.find((l) => l.code === language)?.name ?? 'English',
     setLanguage,
     t: translate(language),
+    errorMessage: source => translate(language)(errorKey(source)),
   } : null, [language, setLanguage]);
 
   if (!value) return <View style={{ flex: 1, backgroundColor: '#0B0B0B' }} />;

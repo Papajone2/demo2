@@ -22,6 +22,7 @@ export function WalletSetup(props: { onBack: () => void; onReady: (p: SetupPath)
   return <PreviewWalletSetup {...props} />;
 }
 function PreviewWalletSetup({ onBack, onReady }: { onBack: () => void; onReady: (p: SetupPath) => void }) {
+  const { errorMessage } = useLanguage();
   const [step, setStep] = useState<Step>('choice');
   const [network, setNetwork] = useState<0 | 2>(0);
   const [nativeWords, setNativeWords] = useState<string[]>([]);
@@ -36,7 +37,7 @@ function PreviewWalletSetup({ onBack, onReady }: { onBack: () => void; onReady: 
     try {
       const created = await nativeEngine().create('', '', '0', network);
       setNativeWords(created.seed.split(' ')); go('phrase');
-    } catch (e) { setError(e instanceof Error ? e.message : 'Wallet creation failed.'); }
+    } catch (e) { setError(errorMessage(e instanceof Error ? e.message : 'Wallet creation failed.')); }
     finally { working.current = false; setBusy(false); }
   };
   const [nonce, setNonce] = useState(0); // remounts steps so ephemeral state is discarded
@@ -140,7 +141,7 @@ function Phrase({ onBack, onNext, tokens }: { onBack: () => void; onNext: () => 
         </Pressable>
       ) : null} />
       <View>
-        <View style={st.grid} accessibilityLabel={shown ? t('Sample tokens, not a recovery phrase') : t('Hidden sample tokens')}>
+        <View style={st.grid} accessibilityLabel={tokens ? t('Recovery phrase') : shown ? t('Sample tokens, not a recovery phrase') : t('Hidden sample tokens')}>
           {entries.map((t, i) => (
             <View key={i} testID={`seed-cell-${i + 1}`} style={[st.cell, { height: cellH }]}>
               <Text style={[st.num, { color: '#6E6E73' }]}>{i + 1}</Text>
@@ -150,7 +151,7 @@ function Phrase({ onBack, onNext, tokens }: { onBack: () => void; onNext: () => 
         </View>
         {!shown ? (
           <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-            <Pressable testID="seed-reveal" accessibilityRole="button" accessibilityLabel={t('Reveal sample tokens')} onPress={() => { tap('medium'); setShown(true); }}
+            <Pressable testID="seed-reveal" accessibilityRole="button" accessibilityLabel={tokens ? t('Recovery phrase') : t('Reveal sample tokens')} onPress={() => { tap('medium'); setShown(true); }}
               style={({ pressed }) => [cs.reveal, { backgroundColor: pressed ? '#2A2A2D' : '#232326' }]}>
               <Feather name="eye" size={17} color={c.primary} />
               <Text style={{ fontFamily: F.s, fontSize: 15, color: c.inkForeground }}>{t('Tap to reveal')}</Text>
@@ -172,7 +173,7 @@ const REJECT = msg('Use the sample phrase in this preview. Real recovery needs t
 
 function Restore({ onBack, onDone, onRestore }: { onBack: () => void; onDone: () => void; onRestore?: (seed: string, height: string) => Promise<void> }) {
   const c = useColors();
-  const { t } = useLanguage();
+  const { t, errorMessage } = useLanguage();
   const [count, setCount] = useState<16 | 25>(16);
   const [words, setWords] = useState<string[]>(() => Array(16).fill(''));
   const [height, setHeight] = useState('');
@@ -205,7 +206,7 @@ function Restore({ onBack, onDone, onRestore }: { onBack: () => void; onDone: ()
     if (onRestore) {
       inflight.current = true; setBusy(true); setErr(null);
       try { await onRestore(words.map(w => w.trim()).join(' '), height || '0'); setWords(Array(count).fill('')); onDone(); }
-      catch (e) { setErr(e instanceof Error ? e.message : 'Could not restore wallet.'); }
+      catch (e) { setErr(errorMessage(e instanceof Error ? e.message : 'Could not restore wallet.')); }
       finally { inflight.current = false; setBusy(false); }
       return;
     }
@@ -268,7 +269,7 @@ function Restore({ onBack, onDone, onRestore }: { onBack: () => void; onDone: ()
               accessibilityLabel={t('Entry {n}', { n: i + 1 })}
               value={w}
               onChangeText={(v) => set(i, v)}
-              onFocus={() => setFocus(i)}
+              onFocus={() => { setFocus(i); setTouched(current => { const next = new Set(current); next.delete(i); return next; }); }}
               onBlur={() => { setFocus(-1); setTouched(current => new Set(current).add(i)); }}
               autoCapitalize="none"
               autoCorrect={false}

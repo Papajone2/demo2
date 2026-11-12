@@ -8,7 +8,7 @@ import { IS_NATIVE_ANDROID, nativeEngine } from '@/lib/native-engine';
 import { loadNetworkPolicy, setMarketBlocked } from '@/lib/network-policy';
 
 export function NodeSettings() {
-  const c = useColors(), { t } = useLanguage(), { reload, state } = useWallet();
+  const c = useColors(), { t, errorMessage } = useLanguage(), { reload, state } = useWallet();
   const [url, setUrl] = useState('');
   const [tor, setTor] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -25,7 +25,7 @@ export function NodeSettings() {
       await loadNetworkPolicy(); reload();
     } catch (e) {
       await loadNetworkPolicy().catch(() => setMarketBlocked(true));
-      setError(t(e instanceof Error ? e.message : 'Could not connect to node.'));
+      setError(errorMessage(e instanceof Error ? e.message : 'Could not connect to node.'));
     } finally { setBusy(false); }
   };
   return <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, gap: 18 }}>

@@ -163,8 +163,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       });
     },
     send: async () => { throw new Error('Native payments require an engine-prepared review token.'); },
-    addFunds: async () => { throw new Error('Simulation credits are disabled in the native APK. Use a stagenet faucet.'); },
-    advanceBlocks: async () => { throw new Error('Native confirmations come from the stagenet blockchain.'); },
+    addFunds: async () => { throw new Error('Simulation credits are disabled in the native APK.'); },
+    advanceBlocks: async () => { throw new Error('Confirmations come from the blockchain and cannot be advanced by the app.'); },
     resetSandbox: async () => { throw new Error('Native wallet reset is disabled. Back up before deleting an account.'); },
     updatePrefs: async p => {
       if (!state) throw new Error('Select a wallet.');

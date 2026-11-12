@@ -152,7 +152,7 @@ export function WalletGate({ children }: { children: React.ReactNode }) {
           <Feather name="plus" size={28} color={c.primary} />
         </View>
         <Text style={[s.h2, { color: c.foreground }]}>{t('No wallet on this device')}</Text>
-        <Text style={[s.body, { color: c.mutedForeground }]}>{t('Every local test account was deleted. Create a new one to keep testing.')}</Text>
+        <Text style={[s.body, { color: c.mutedForeground }]}>{IS_NATIVE_ANDROID ? t('No accounts on this device') : t('Every local test account was deleted. Create a new one to keep testing.')}</Text>
         <Btn testID="empty-create-wallet" label={t('Create wallet')} icon="plus" onPress={() => router.push('/accounts')} />
       </View>
     );
