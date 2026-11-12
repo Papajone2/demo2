@@ -1,0 +1,180 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+paths:
+  /monero/stats:
+    get:
+      operationId: getMoneroStats
+      summary: Public Monero asset statistics
+      parameters:
+        - in: query
+          name: currency
+          schema: { type: string, enum: [usd, eur, gbp], default: usd }
+      responses:
+        "200":
+          description: Observed market statistics; unavailable fields remain null
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MoneroStats" }
+        "503":
+          description: Market statistics unavailable
+  /monero/history:
+    get:
+      operationId: getMoneroHistory
+      summary: Observed Monero market prices for the selected period
+      parameters:
+        - in: query
+          name: currency
+          schema: { type: string, enum: [usd, eur, gbp], default: usd }
+        - in: query
+          name: range
+          schema: { type: string, enum: [1h, 1d, 1w, 1m, 1y], default: 1d }
+      responses:
+        "200":
+          description: Actual timestamped observations, with an explicit delayed-data flag
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MoneroHistory" }
+        "503":
+          description: Market history unavailable
+  /monero/price:
+    get:
+      operationId: getMoneroPrice
+      summary: Public Monero reference price
+      parameters:
+        - in: query
+          name: currency
+          schema: { type: string, enum: [usd, eur, gbp], default: usd }
+      responses:
+        "200":
+          description: Timestamped market reference, never a fabricated fallback
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MoneroPrice" }
+        "503":
+          description: Market data unavailable
+  /monero/node:
+    get:
+      operationId: getMoneroNode
+      summary: Public node connection status
+      parameters:
+        - in: query
+          name: network
+          schema: { type: string, enum: [stagenet, mainnet], default: stagenet }
+      responses:
+        "200":
+          description: Observed node status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MoneroNode" }
+  /monero/daemon/{network}/{endpoint}:
+    post:
+      operationId: moneroDaemonRequest
+      summary: Allowlisted public blockchain protocol relay without wallet keys
+      parameters:
+        - in: path
+          name: network
+          required: true
+          schema: { type: string, enum: [stagenet, mainnet] }
+        - in: path
+          name: endpoint
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: Daemon JSON or portable binary protocol response
+        "400":
+          description: Endpoint or RPC method not allowed
+        "502":
+          description: Node unavailable
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+components:
+  schemas:
+    MoneroStats:
+      type: object
+      required: [createdYear, marketCap, circulatingSupply, totalSupply, allTimeHigh, updatedAt, stale]
+      properties:
+        createdYear: { type: integer }
+        marketCap: { type: ["number", "null"] }
+        circulatingSupply: { type: ["number", "null"] }
+        totalSupply: { type: ["number", "null"] }
+        allTimeHigh: { type: ["number", "null"] }
+        updatedAt: { type: string }
+        stale: { type: boolean }
+    MoneroHistoryPoint:
+      type: object
+      required: [timestamp, price]
+      properties:
+        timestamp: { type: number }
+        price: { type: number, exclusiveMinimum: 0 }
+    MoneroHistory:
+      type: object
+      required: [currency, points, price, changeAbsolute, changePercent, updatedAt, source, stale]
+      properties:
+        currency: { type: string, enum: [usd, eur, gbp] }
+        points:
+          type: array
+          minItems: 2
+          items: { $ref: "#/components/schemas/MoneroHistoryPoint" }
+        price: { type: number, exclusiveMinimum: 0 }
+        changeAbsolute: { type: number }
+        changePercent: { type: number }
+        updatedAt: { type: string }
+        source: { type: string }
+        stale: { type: boolean }
+    DaemonPayload:
+      type: object
+      additionalProperties: true
+    MoneroPrice:
+      type: object
+      required: [currency, price, change24h, updatedAt, source, stale]
+      properties:
+        currency: { type: string }
+        price: { type: number }
+        change24h: { type: ["number", "null"] }
+        updatedAt: { type: string }
+        source: { type: string }
+        stale: { type: boolean }
+    MoneroNode:
+      type: object
+      required: [network, connected, height, targetHeight, checkedAt, error]
+      properties:
+        network: { type: string }
+        connected: { type: boolean }
+        height: { type: ["integer", "null"] }
+        targetHeight: { type: ["integer", "null"] }
+        checkedAt: { type: string }
+        error: { type: ["string", "null"] }
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+

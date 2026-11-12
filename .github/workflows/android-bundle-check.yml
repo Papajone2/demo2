@@ -1,0 +1,66 @@
+name: Android bundle checks
+
+on:
+  push:
+    branches: [wallet-source]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: "1"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_DOMAIN: ${{ vars.API_DOMAIN }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - name: Install Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.22.1"
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build shared API declarations
+        run: pnpm exec tsc --build lib/api-client-react
+      - name: Typecheck Android interface
+        run: pnpm --filter @workspace/monero2014 run typecheck
+      - name: Run wallet regression tests
+        run: node --experimental-strip-types --test artifacts/monero2014/lib/*.test.mjs
+      - name: Export Android JavaScript bundle
+        working-directory: artifacts/monero2014
+        run: pnpm exec expo export --platform android --output-dir ../../generated-artifacts/android-bundle
+      - name: Upload bundle for inspection
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-javascript-bundle
+          path: generated-artifacts/android-bundle
+          if-no-files-found: error
+          retention-days: 7
+      - name: Explain build scope
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Android JavaScript verification
+          Typechecking, wallet regression tests and Android JavaScript export passed.
+
+          The downloadable artifact is **not an APK**. This workflow does not
+          compile a native application, add a Monero engine, sign transactions,
+          verify device behavior or enable mainnet.
+
+          The Android interface still uses simulated wallet operations.
+          See `artifacts/monero2014/NATIVE-WALLET.md` for native requirements.
+          EOF
