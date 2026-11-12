@@ -35,6 +35,8 @@ jobs:
           cache: pnpm
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build shared API declarations
+        run: pnpm exec tsc --build lib/api-client-react
       - name: Typecheck Android interface
         run: pnpm --filter @workspace/monero2014 run typecheck
       - name: Run wallet regression tests

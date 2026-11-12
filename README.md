@@ -19,6 +19,7 @@ Use Node 24.22.1 and pnpm 10.26.1:
 
 ```sh
 pnpm install --frozen-lockfile
+pnpm exec tsc --build lib/api-client-react
 pnpm --filter @workspace/monero2014 run typecheck
 node --experimental-strip-types --test artifacts/monero2014/lib/*.test.mjs
 ```
