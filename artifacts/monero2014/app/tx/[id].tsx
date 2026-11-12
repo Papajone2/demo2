@@ -22,7 +22,7 @@ function Detail() {
     return (
       <View style={{ flex: 1, backgroundColor: c.background, justifyContent: 'center', padding: 24 }}>
         <Stack.Screen options={{ title: t('Transaction') }} />
-        <EmptyState icon="help-circle" title={t('Transaction not found')} body={t('It may have been removed by a sandbox reset.')} />
+        <EmptyState icon="help-circle" title={t('Transaction not found')} body={IS_NATIVE_ANDROID ? t('Try a different search or filter.') : t('It may have been removed by a sandbox reset.')} />
         <Btn label={t('Back')} onPress={() => router.back()} />
       </View>
     );
@@ -33,7 +33,7 @@ function Detail() {
   const rows: [string, string][] = [
     [t('Status'), pending ? t('Pending · {a}/{b} confirmations', { a: tx.confirmations, b: REQUIRED_CONFIRMATIONS }) : t('Confirmed · {n}+ blocks', { n: tx.confirmations })],
     [t('Date'), new Date(tx.createdAt).toLocaleString()],
-    ...(!isIn ? [[t('To'), tx.address] as [string, string]] : []),
+    ...(!isIn && tx.address ? [[t('To'), tx.address] as [string, string]] : []),
     [t('Amount'), `${formatXmr(amt, 12)} XMR`],
     ...(!isIn ? ([[t('Network fee'), `${formatXmr(BigInt(tx.fee), 12)} XMR`]] as [string, string][]) : []),
     ...(rate ? ([[t('Equivalent'), formatFiat(fiatCents(amt, rate), currencySymbol(state.currency))]] as [string, string][]) : []),

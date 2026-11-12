@@ -27,6 +27,8 @@ const accountState = (a: NativeAccount, snapshot: NativeSnapshot | null, prefs: 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const { authorize } = useLock();
   const { language } = useLanguage();
+  const languageRef = useRef(language);
+  languageRef.current = language;
   const [accounts, setAccounts] = useState<NativeAccount[]>([]);
   const [snapshot, setSnapshot] = useState<NativeSnapshot | null>(null);
   const [prefs, setPrefs] = useState<Prefs>({});
@@ -63,13 +65,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (!mounted.current) return;
       setAccounts(list);
       const raw = await AsyncStorage.getItem(PREFS);
-      if (raw) setPrefs(JSON.parse(raw));
       // A language suggests an initial currency; an explicit preference wins.
-      if (language === 'hi') {
-        const existing: Prefs = raw ? JSON.parse(raw) : {};
-        for (const a of list) if (!existing[a.id]?.currency) existing[a.id] = { ...existing[a.id], currency: 'INR' };
-        await AsyncStorage.setItem(PREFS, JSON.stringify(existing)); setPrefs(existing);
-      }
+      const existing: Prefs = raw ? JSON.parse(raw) : {};
+      for (const a of list) if (!existing[a.id]?.currency) existing[a.id] = { ...existing[a.id], currency: languageRef.current === 'hi' ? 'INR' : 'USD' };
+      await AsyncStorage.setItem(PREFS, JSON.stringify(existing)); setPrefs(existing);
       if (list.length) {
         const s = await engine.open(list[0].id);
         publish(s);
@@ -82,7 +81,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       } else setSnapshot(null);
     }).catch(e => mounted.current && setError(e instanceof Error ? e.message : 'Native engine failed.'))
       .finally(() => mounted.current && setLoading(false));
-  }, [run, publish, language]);
+  }, [run, publish]);
   useEffect(() => {
     const listener = AppState.addEventListener('change', next => {
       active.current = next === 'active';

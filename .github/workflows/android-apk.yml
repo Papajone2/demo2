@@ -64,6 +64,7 @@ jobs:
           "$APKSIGNER" verify generated-artifacts/native-android/monero2014-wallet.apk
           cp artifacts/monero2014/NATIVE-WALLET.md generated-artifacts/native-android/
           cp artifacts/monero2014/modules/monero-engine/THIRD-PARTY.md generated-artifacts/native-android/
+          cp artifacts/monero2014/lib/MNEMONIC-NOTICES.txt generated-artifacts/native-android/
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: monero2014-wallet-apk-${{ github.run_number }}

@@ -13,6 +13,7 @@ type Engine = {
   list(): Promise<NativeAccount[]>;
   create(name: string, seed: string, height: string, network: number): Promise<{ id: string; seed: string; address: string }>;
   deriveSecret(secret: string, salt: string, iterations: number): Promise<string>;
+  copyPrivateText(text: string): Promise<void>;
   open(id: string): Promise<NativeSnapshot>;
   connect(url: string): Promise<void>;
   privacy(): Promise<{ tor: boolean }>;

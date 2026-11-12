@@ -13,7 +13,6 @@ import { type AvatarId, MAX_WALLET_NAME_LENGTH, walletNameLength, type WalletSta
 import { useLanguage } from '@/context/LanguageContext';
 import { IS_NATIVE_ANDROID, nativeEngine } from '@/lib/native-engine';
 import { WalletSetup } from './wallet-setup';
-import * as Clipboard from 'expo-clipboard';
 
 function Body({ children }: { children: React.ReactNode }) {
   const c = useColors();
@@ -132,6 +131,7 @@ function SecretReveal({ kind, onBack, walletId }: { kind: 'recovery' | 'viewkey'
   const [ack, setAck] = useState(false);
   const [step, setStep] = useState<'warn' | 'auth' | 'result'>('warn');
   const [revealed, setRevealed] = useState('');
+  const [copyStatus, setCopyStatus] = useState('');
   const rec = kind === 'recovery';
   const title = rec ? 'Show Recovery Phrase' : 'Show View Key';
 
@@ -154,10 +154,10 @@ function SecretReveal({ kind, onBack, walletId }: { kind: 'recovery' | 'viewkey'
       {rec ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>{revealed.split(/\s+/).map((word, i) => <View key={i} style={{ width: '47%', backgroundColor: c.charcoal, borderRadius: 12, padding: 12 }}><Text style={{ color: c.foreground, fontFamily: F.m }}>{i + 1}. {word}</Text></View>)}</View> : <Text style={{ color: c.foreground, fontFamily: F.m }}>{revealed}</Text>}
       <Notice tone="danger" title={t('Keep your recovery phrase secret')} body={t('Clipboard contents may be visible to other apps. Prefer an offline backup. Copied words are cleared after one minute if unchanged.')} />
       {rec ? <Btn label={t('Copy')} icon="copy" variant="soft" onPress={async () => {
-        await Clipboard.setStringAsync(revealed);
-        const text = revealed;
-        setTimeout(() => { void Clipboard.getStringAsync().then(current => current === text ? Clipboard.setStringAsync('') : undefined).catch(() => undefined); }, 60000);
+        try { await nativeEngine().copyPrivateText(revealed); setCopyStatus(t('Copied')); }
+        catch { setCopyStatus(t('Clipboard unavailable on this device.')); }
       }} /> : null}
+      {copyStatus ? <Text style={{ color: c.mutedForeground }}>{copyStatus}</Text> : null}
       <Btn testID="secret-done" label={t('Done')} onPress={() => { setRevealed(''); onBack(); }} />
     </Screen>;
     return (

@@ -122,9 +122,11 @@ function Phrase({ onBack, onNext, tokens }: { onBack: () => void; onNext: () => 
     if (!shown) return;
     try {
       const text = entries.join(' ');
-      await Clipboard.setStringAsync(text); tap('success'); setCopyErr(false); setCopied(true);
+      if (tokens && IS_NATIVE_ANDROID) await nativeEngine().copyPrivateText(text);
+      else await Clipboard.setStringAsync(text);
+      tap('success'); setCopyErr(false); setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-      if (tokens) setTimeout(() => { void Clipboard.getStringAsync().then(current => current === text ? Clipboard.setStringAsync('') : undefined).catch(() => undefined); }, 60000);
+      if (tokens && !IS_NATIVE_ANDROID) setTimeout(() => { void Clipboard.getStringAsync().then(current => current === text ? Clipboard.setStringAsync('') : undefined).catch(() => undefined); }, 60000);
     }
     catch { setCopyErr(true); }
   };
