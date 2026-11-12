@@ -43,7 +43,7 @@ export function OnboardSlide({ testID, title, body, active, onDot, onNext, topRi
             <Text accessibilityRole="header" adjustsFontSizeToFit numberOfLines={2} style={[st.head, { fontSize: fs, lineHeight: lh }]}>{title}</Text>
           </View>
           <View style={{ position: 'absolute', top: bodyY, left: 22, right: 22, height: blh * 3 }}>
-            <Text adjustsFontSizeToFit numberOfLines={3} style={[st.body, { fontSize: bfs, lineHeight: blh }]}>{body}</Text>
+            <Text style={[st.body, { fontSize: bfs, lineHeight: blh }]}>{body.replace(/\n/g, ' ')}</Text>
           </View>
 
           <View style={[st.dots, { top: dotsY - 6 }]}>
@@ -77,7 +77,7 @@ const st = StyleSheet.create({
   dots: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 4 },
   dotHit: { width: 27, height: 23, alignItems: 'center', justifyContent: 'center' },
   dot: { width: 11, height: 11, borderRadius: 6 },
-  btn: { position: 'absolute', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 4 }, elevation: 10 },
+  btn: { position: 'absolute', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   foot: { position: 'absolute', flexDirection: 'row', alignItems: 'center', gap: 14, height: 20 },
   rule: { flex: 1, height: 1, backgroundColor: '#2A2A2C' },
 });

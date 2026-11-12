@@ -20,6 +20,9 @@ internal interface WalletApi : Library {
   fun MONERO_Wallet_store(wallet: Pointer, path: String): Byte
   fun MONERO_Wallet_address(wallet: Pointer, account: Long, index: Long): Pointer
   fun MONERO_Wallet_addressValid(address: String, network: Int): Byte
+  fun MONERO_Wallet_getPolyseed(wallet: Pointer, passphrase: String): Pointer
+  fun MONERO_Wallet_seed(wallet: Pointer, offset: String): Pointer
+  fun MONERO_Wallet_secretViewKey(wallet: Pointer): Pointer
   fun MONERO_Wallet_init(wallet: Pointer, daemon: String, maxSize: Long, user: String, password: String,
     ssl: Byte, light: Byte, proxy: String): Byte
   fun MONERO_Wallet_setTrustedDaemon(wallet: Pointer, trusted: Byte)

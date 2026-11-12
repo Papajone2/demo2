@@ -32,6 +32,7 @@ export function tap(kind: 'light' | 'medium' | 'success' | 'error' = 'light') {
 
 export function TestBanner({ compact }: { compact?: boolean }) {
   const c = useColors();
+  const { state } = useWallet();
   const { t } = useLanguage();
   return (
     <Pressable
@@ -40,8 +41,8 @@ export function TestBanner({ compact }: { compact?: boolean }) {
       style={({ pressed }) => [s.banner, { backgroundColor: c.warnBg, opacity: pressed ? 0.8 : 1 }, compact && { paddingVertical: 6 }]}
     >
       <View style={[s.bannerDot, { backgroundColor: c.warn }]} />
-      <Text style={[s.bannerText, { color: c.warn }]}>{t('Test wallet • No real XMR')}</Text>
-      {!compact && <Text style={[s.bannerSub, { color: c.warn }]}>{IS_NATIVE_ANDROID ? 'STAGENET' : t('Sandbox')}</Text>}
+      <Text style={[s.bannerText, { color: c.warn }]}>{IS_NATIVE_ANDROID && state?.network === 'mainnet' ? 'Mainnet · experimental wallet' : t('Test wallet • No real XMR')}</Text>
+      {!compact && <Text style={[s.bannerSub, { color: c.warn }]}>{IS_NATIVE_ANDROID ? state?.network === 'mainnet' ? 'REAL XMR' : 'STAGENET' : t('Sandbox')}</Text>}
     </Pressable>
   );
 }

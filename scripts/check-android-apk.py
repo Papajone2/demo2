@@ -30,7 +30,7 @@ if __name__ == "__main__":
     path.with_name("build-manifest.json").write_text(json.dumps({
         "commit": __import__("os").environ.get("GITHUB_SHA"),
         "engine": "MrCyjaneK/monero_c v0.18.4.6-RC2",
-        "network": "stagenet", "signing": "Android development key; not production",
+        "networks": ["mainnet", "stagenet"], "signing": "Android development key; not production",
         "abis": ["arm64-v8a", "x86_64"], "apkSha256": digest,
     }, indent=2) + "\n")
     print("APK verified: Android manifest, DEX, bundled app, native Monero engine and JNA loader.")

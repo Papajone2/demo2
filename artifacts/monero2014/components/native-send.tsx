@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, Text } from 'react-native';
-import { router } from 'expo-router';
-import { Btn, Card, Field, s as ui } from './ui';
+import { router, Stack } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
+import { Btn, Card, Field, s as ui, useInsets } from './ui';
 import { useColors } from '@/hooks/useColors';
 import { useWallet } from '@/context/WalletContext';
 import { useLock } from '@/context/LockContext';
@@ -10,7 +11,9 @@ import { nativeEngine, type NativeQuote } from '@/lib/native-engine';
 
 export function NativeSend() {
   const c = useColors();
-  const { available, sync, reload } = useWallet();
+  const ins = useInsets();
+  const { available, sync, reload, state } = useWallet();
+  const network = state?.network ?? 'stagenet';
   const { authorize } = useLock();
   const [address, setAddress] = useState('');
   const [amount, setAmount] = useState('');
@@ -26,8 +29,8 @@ export function NativeSend() {
     once.current = true; setBusy(true); setError('');
     try {
       const atomic = parseXmr(amount);
-      if (atomic === null || atomic <= 0n) throw new Error('Enter a positive XMR amount with at most 12 decimals.');
-      setQuote(await nativeEngine().prepare(address.trim(), atomic.toString()));
+      if (amount !== 'MAX' && (atomic === null || atomic <= 0n)) throw new Error('Enter a positive XMR amount with at most 12 decimals.');
+      setQuote(await nativeEngine().prepare(address.trim(), amount === 'MAX' ? 'MAX' : atomic!.toString()));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Preparation failed.');
       await nativeEngine().discard().catch(() => undefined);
@@ -51,9 +54,10 @@ export function NativeSend() {
     } finally { once.current = false; setBusy(false); }
   };
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: c.background }} contentContainerStyle={{ padding: 20, gap: 18 }}>
-      <Text style={[ui.h2, { color: c.foreground }]}>Send · STAGENET</Text>
-      <Text style={[ui.body, { color: c.mutedForeground }]}>Unlocked: {formatXmr(available, 12)} XMR. Test coins only.</Text>
+    <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1, backgroundColor: c.background }} contentContainerStyle={{ padding: 20, paddingBottom: ins.bottom + 28, gap: 18 }}>
+      <Stack.Screen options={{ title: quote ? 'Review' : 'Send' }} />
+      <Text style={[ui.h2, { color: c.foreground }]}>Send · {network.toUpperCase()}</Text>
+      <Text style={[ui.body, { color: c.mutedForeground }]}>Unlocked: {formatXmr(available, 12)} XMR. {network === 'mainnet' ? 'Real XMR. Verify every detail; transfers cannot be reversed.' : 'Test coins only.'}</Text>
       {quote ? <>
         <Card style={{ gap: 12 }}>
           <Text selectable style={{ color: c.foreground }}>To: {quote.address}</Text>
@@ -62,16 +66,21 @@ export function NativeSend() {
           <Text style={{ color: c.foreground }}>Total: {formatXmr(BigInt(quote.amount) + BigInt(quote.fee), 12)} XMR</Text>
           <Text selectable style={{ color: c.mutedForeground }}>Transaction: {quote.txid}</Text>
         </Card>
-        <Text style={[ui.body, { color: c.mutedForeground }]}>The native engine prepared this exact transaction locally. Confirm once to broadcast it to stagenet.</Text>
+        <Text style={[ui.body, { color: c.mutedForeground }]}>The native engine prepared this exact transaction locally. Confirm once to broadcast it to {network}.</Text>
         <Field label="App PIN or password" value={secret} onChangeText={setSecret} secureTextEntry autoCorrect={false} autoCapitalize="none" />
         <Btn label="Confirm and broadcast" loading={busy} disabled={busy || uncertain || !secret} onPress={commit} />
         <Btn label="Discard review" variant="ghost" disabled={busy} onPress={async () => {
           await nativeEngine().discard(); setQuote(null); setSecret(''); reload();
         }} />
       </> : <>
-        <Field label="Recipient stagenet address" value={address} onChangeText={setAddress} autoCorrect={false} autoCapitalize="none" mono />
-        <Field label="Amount (stagenet XMR)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
-        {!sync.complete ? <Text style={{ color: c.warn }}>Waiting for real blockchain scanning. Configure your stagenet node under Real wallets.</Text> : null}
+        <Field label={`Recipient ${network} address`} value={address} onChangeText={setAddress} autoCorrect={false} autoCapitalize="none" mono />
+        <Btn label="Paste address" variant="soft" disabled={busy} onPress={async () => {
+          try { setAddress((await Clipboard.getStringAsync()).trim()); setError(''); }
+          catch { setError('Clipboard unavailable on this device.'); }
+        }} />
+        <Field label={`Amount (${network === 'mainnet' ? 'XMR' : 'stagenet XMR'})`} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
+        <Btn label="Max · engine calculates the fee" variant="ghost" disabled={busy || !sync.complete || available <= 0n} onPress={() => setAmount('MAX')} />
+        {!sync.complete ? <Text style={{ color: c.warn }}>Waiting for blockchain scanning. Configure your {network} node under Real wallets.</Text> : null}
         <Btn label="Prepare and review" loading={busy} disabled={busy || !sync.complete} onPress={prepare} />
       </>}
       {error ? <Text accessibilityRole="alert" selectable style={{ color: c.destructive }}>{error}</Text> : null}

@@ -1,6 +1,7 @@
 import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
 import { Feather } from '@expo/vector-icons';
-import { getGetMoneroHistoryQueryKey, useGetMoneroHistory, type GetMoneroHistoryCurrency } from '@workspace/api-client-react';
+import { getGetMoneroHistoryQueryKey, type GetMoneroHistoryCurrency } from '@workspace/api-client-react';
+import { useMarketHistory as useGetMoneroHistory } from '@/hooks/useMarketData';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -16,7 +17,7 @@ import { useColors } from '@/hooks/useColors';
 import { ATOMIC_PER_XMR, currencySymbol, formatXmr } from '@/lib/money';
 
 const BG = require('@/assets/images/monero-background.png');
-const DIM = 'rgba(128,128,128,0.5)';
+const DIM = 'rgba(0,0,0,0.55)';
 const HIDDEN = '••••';
 const MARKET: Record<string, GetMoneroHistoryCurrency> = { USD: 'usd', EUR: 'eur', GBP: 'gbp' };
 
@@ -103,7 +104,7 @@ function Overview() {
   const recent = state.txs.slice(0, 3);
   const qty = Number(available) / Number(ATOMIC_PER_XMR);
   const m = mc && market.data && !market.isError ? market.data : null;
-  const fiat = m ? money(qty * m.price, sym) : null;
+  const fiat = qty === 0 ? money(0, sym) : m ? money(qty * m.price, sym) : null;
   const valueChange = m ? qty * m.changeAbsolute : 0;
   const up = (m?.changePercent ?? 0) >= 0;
   const tone = up ? c.success : c.loss;
@@ -136,7 +137,7 @@ function Overview() {
             <Feather name={sync.complete ? 'check-circle' : 'refresh-cw'} size={16} color={sync.complete ? c.success : c.primary} />
             <Text style={{ fontFamily: F.s, fontSize: 16, color: c.foreground, flex: 1 }}>{sync.complete ? t('Synced') : t('Syncing')}</Text>
             <Text testID="sync-status" style={[st.num, { fontSize: 13, color: c.mutedForeground }]}>{sync.complete ? '100%' : IS_NATIVE_ANDROID ? `${Math.round(sync.progress * 100)}%` : `${Math.round(sync.progress * 100)}% \u00b7 ~${sync.remainingSeconds}s`}</Text>
-            <View style={[st.tag, { backgroundColor: c.secondary }]}><Text style={{ fontFamily: F.s, fontSize: 11, color: c.mutedForeground }}>{IS_NATIVE_ANDROID ? 'Stagenet' : t('Preview')}</Text></View>
+            <View style={[st.tag, { backgroundColor: c.secondary }]}><Text style={{ fontFamily: F.s, fontSize: 11, color: c.mutedForeground }}>{IS_NATIVE_ANDROID ? state.network === 'mainnet' ? 'Mainnet' : 'Stagenet' : t('Preview')}</Text></View>
           </View>
           <View style={[st.track, { backgroundColor: c.secondary }]} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(sync.progress * 100) }}>
             <View style={{ width: `${Math.min(100, sync.progress * 100)}%`, height: '100%', borderRadius: 3, backgroundColor: sync.complete ? c.success : c.primary }} />
@@ -158,7 +159,7 @@ function Overview() {
   );
 
   return (
-    <View onLayout={(e) => setRootH(e.nativeEvent.layout.height)} style={{ flex: 1, backgroundColor: c.background }}>
+    <View onLayout={(e) => setRootH(e.nativeEvent.layout.height)} style={{ flex: 1, backgroundColor: '#000000' }}>
       <Animated.ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
@@ -167,7 +168,6 @@ function Overview() {
         {/* Wallpaper is part of the scrolling content, so it moves up together with it. */}
         <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: winH }}>
           <Image source={BG} style={StyleSheet.absoluteFill} contentFit="cover" />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: c.foreground, opacity: 0.06 }]} />
         </View>
         <View style={st.top}>
           <Pressable testID="home-avatar" accessibilityLabel={t('Accounts')} onPress={() => { tap(); router.push('/accounts'); }} hitSlop={6}>
@@ -188,7 +188,7 @@ function Overview() {
               <View style={[st.skel, { width: 230, height: 54, backgroundColor: c.charcoal }]} />
             ) : (
               <Text testID="fiat-total" adjustsFontSizeToFit numberOfLines={1} style={[st.fiat, st.shadow, { color: c.foreground }]}>
-                {hide ? `${sym}${HIDDEN}` : fiat ?? `${formatXmr(available, 4)} XMR`}
+                {hide ? `${sym}${HIDDEN}` : fiat ?? `${sym}—`}
               </Text>
             )}
             {hide ? (

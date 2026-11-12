@@ -34,6 +34,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
       - name: Typecheck and regression tests
@@ -57,15 +58,15 @@ jobs:
       - name: Verify APK contents, signature and checksums
         run: |
           mkdir -p generated-artifacts/native-android
-          cp artifacts/monero2014/android/app/build/outputs/apk/release/app-release.apk generated-artifacts/native-android/monero2014-stagenet.apk
-          python3 scripts/check-android-apk.py generated-artifacts/native-android/monero2014-stagenet.apk
+          cp artifacts/monero2014/android/app/build/outputs/apk/release/app-release.apk generated-artifacts/native-android/monero2014-wallet.apk
+          python3 scripts/check-android-apk.py generated-artifacts/native-android/monero2014-wallet.apk
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
-          "$APKSIGNER" verify generated-artifacts/native-android/monero2014-stagenet.apk
+          "$APKSIGNER" verify generated-artifacts/native-android/monero2014-wallet.apk
           cp artifacts/monero2014/NATIVE-WALLET.md generated-artifacts/native-android/
           cp artifacts/monero2014/modules/monero-engine/THIRD-PARTY.md generated-artifacts/native-android/
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: monero2014-stagenet-apk-${{ github.run_number }}
+          name: monero2014-wallet-apk-${{ github.run_number }}
           path: generated-artifacts/native-android/
           if-no-files-found: error
           retention-days: 14
@@ -73,15 +74,16 @@ jobs:
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
           ## Installable native Android APK
-          Download **monero2014-stagenet-apk** under this run's Artifacts, unzip,
-          and install `monero2014-stagenet.apk` on Android 8+ (ARM64 or x86_64).
+          Download **monero2014-wallet-apk** under this run's Artifacts, unzip,
+          and install `monero2014-wallet.apk` on Android 8+ (ARM64 or x86_64).
           It includes the native Monero engine, JNA bridge and bundled frontend;
           it does not require Expo Go or Metro.
 
-          **Stagenet only, signed with an Android development key.**
-          This is not a production/mainnet release or an audited wallet.
-          Device backup/restore, scanning and funded stagenet transfer testing
-          remain required. Do not enter a funded mainnet recovery phrase.
+          **Experimental mainnet/stagenet, signed with an Android development key.**
+          This is not a production release or an audited wallet.
+          Existing stagenet wallets stay stagenet. Create a separate mainnet
+          wallet explicitly. Funded receipt/send testing remains unverified.
+          Do not risk valuable funds or enter a funded phrase in automated tests.
           EOF
       - name: Enable KVM for native engine instrumentation
         run: |
@@ -98,6 +100,7 @@ jobs:
           working-directory: artifacts/monero2014/android
           script: |
             ./gradlew :monero-engine:connectedDebugAndroidTest -PreactNativeArchitectures=x86_64 --no-daemon --max-workers=2 --stacktrace
+            adb logcat -d -s WalletTests:I '*:S' | tee "$GITHUB_WORKSPACE/generated-artifacts/native-android/native-pin-timing.txt"
             adb install -r app/build/outputs/apk/release/app-release.apk
             adb shell am start -n com.monero2014.wallet.stagenet/.MainActivity
             sleep 15
@@ -107,7 +110,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: native-launch-evidence
-          path: generated-artifacts/native-android/native-launch.png
+          path: |
+            generated-artifacts/native-android/native-launch.png
+            generated-artifacts/native-android/native-pin-timing.txt
           if-no-files-found: error
       - name: Upload native instrumentation reports
         if: always()

@@ -14,12 +14,16 @@ class MoneroEngineModule : Module() {
       }
     }
     AsyncFunction("list") { engine.list() }
-    AsyncFunction("create") { name: String, seed: String, height: String -> engine.create(name, seed, height) }
+    AsyncFunction("create") { name: String, seed: String, height: String, network: Int -> engine.create(name, seed, height, network) }
+    AsyncFunction("deriveSecret") { secret: String, saltHex: String, iterations: Int ->
+      deriveLockSecret(secret, saltHex, iterations)
+    }
     AsyncFunction("open") { id: String -> engine.open(id) }
     AsyncFunction("connect") { url: String -> engine.connect(url) }
     AsyncFunction("snapshot") { engine.snapshot() }
     AsyncFunction("subaddress") { engine.subaddress() }
     AsyncFunction("profile") { id: String, name: String, icon: String -> engine.profile(id, name, icon) }
+    AsyncFunction("secret") { id: String, recovery: Boolean -> engine.secret(id, recovery) }
     AsyncFunction("remove") { id: String -> engine.remove(id) }
     AsyncFunction("prepare") { address: String, amount: String -> engine.prepare(address, amount) }
     AsyncFunction("commit") { token: String -> engine.commit(token) }

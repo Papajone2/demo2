@@ -4,6 +4,7 @@ import { nativeEngine, type NativeAccount, type NativeSnapshot } from '@/lib/nat
 import { useLock } from '@/context/LockContext';
 import { isAvatarId, validatedWalletName, type WalletState, type AvatarId } from '@/lib/wallet-model';
 import type { Ctx } from './WalletContext';
+import { useMarketHistory } from '@/hooks/useMarketData';
 export { WALLET_STORAGE_KEY, REQUIRED_CONFIRMATIONS, balances } from '@/lib/wallet-model';
 export type { Tx, TxKind, WalletState } from '@/lib/wallet-model';
 
@@ -16,7 +17,7 @@ const accountState = (a: NativeAccount, snapshot: NativeSnapshot | null, prefs: 
   addresses: snapshot?.id === a.id ? snapshot.addresses : [],
   txs: snapshot?.id === a.id ? snapshot.txs : [],
   currency: prefs[a.id]?.currency ?? 'USD', hideBalance: prefs[a.id]?.hideBalance ?? false,
-  rateCents: null, needsCustomization: false,
+  rateCents: null, needsCustomization: a.needsCustomization, network: a.network,
 });
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
@@ -69,7 +70,16 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }, 3000);
     return () => clearInterval(timer);
   }, [snapshot?.id, run, publish]);
-  const wallets = useMemo(() => accounts.map(a => accountState(a, snapshot, prefs)), [accounts, snapshot, prefs]);
+  const currency = prefs[snapshot?.id ?? '']?.currency ?? 'USD';
+  const supportedCurrency = ({ USD: 'usd', EUR: 'eur', GBP: 'gbp' } as const)[currency as 'USD' | 'EUR' | 'GBP'];
+  const market = useMarketHistory({ currency: supportedCurrency ?? 'usd', range: '1d' }, {
+    query: { enabled: Boolean(snapshot && supportedCurrency), staleTime: 60000, refetchInterval: 60000, retry: 1 },
+  });
+  const wallets = useMemo(() => accounts.map(a => {
+    const wallet = accountState(a, snapshot, prefs);
+    if (a.id === snapshot?.id && supportedCurrency && market.data) wallet.rateCents = String(Math.round(market.data.price * 100));
+    return wallet;
+  }), [accounts, snapshot, prefs, supportedCurrency, market.data]);
   const state = wallets.find(w => w.id === snapshot?.id) ?? null;
   const value: Ctx = {
     state, wallets, selectedId: state?.id ?? null, nextWalletNumber: accounts.length + 1,

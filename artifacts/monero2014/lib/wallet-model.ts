@@ -25,6 +25,7 @@ export type Tx = {
   address: string; note: string; createdAt: number;
 };
 export type WalletState = {
+  network?: 'mainnet' | 'stagenet';
   v: 1; id: string; name: string; iconId: AvatarId; receiveAddress: string;
   addresses: string[]; currency: 'USD' | 'EUR' | 'GBP' | 'CHF';
   rateCents: string | null; hideBalance: boolean; txs: Tx[];

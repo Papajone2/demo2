@@ -11,8 +11,8 @@ import { useWallet } from '@/context/WalletContext';
 import { useColors } from '@/hooks/useColors';
 import { type AvatarId, MAX_WALLET_NAME_LENGTH, walletNameLength, type WalletState } from '@/lib/wallet-model';
 import { useLanguage } from '@/context/LanguageContext';
-import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
-import { NativeWalletSetup } from './native-wallet-setup';
+import { IS_NATIVE_ANDROID, nativeEngine } from '@/lib/native-engine';
+import { WalletSetup } from './wallet-setup';
 
 function Body({ children }: { children: React.ReactNode }) {
   const c = useColors();
@@ -59,7 +59,7 @@ export function CustomizeFlow({ mode, wallet, defaultName, onDone, onCancel }: {
   mode: 'create' | 'initial'; wallet?: WalletState | null; defaultName: string; onDone: () => void; onCancel?: () => void;
 }) {
   const { reload } = useWallet();
-  if (IS_NATIVE_ANDROID && mode === 'create') return <NativeWalletSetup onBack={() => onCancel?.()} onReady={() => { reload(); onDone(); }} />;
+  if (IS_NATIVE_ANDROID && mode === 'create') return <WalletSetup onBack={() => onCancel?.()} onReady={() => { reload(); onDone(); }} />;
   return <CustomizeDetails mode={mode} wallet={wallet} defaultName={defaultName} onDone={onDone} onCancel={onCancel} />;
 }
 function CustomizeDetails({ mode, wallet, defaultName, onDone, onCancel }: {
@@ -124,12 +124,13 @@ function CustomizeDetails({ mode, wallet, defaultName, onDone, onCancel }: {
 
 /* ---------------- Secret reveal (recovery / view key) ---------------- */
 
-function SecretReveal({ kind, onBack }: { kind: 'recovery' | 'viewkey'; onBack: () => void }) {
+function SecretReveal({ kind, onBack, walletId }: { kind: 'recovery' | 'viewkey'; onBack: () => void; walletId: string }) {
   const c = useColors();
   const { authorize } = useLock();
   const { t } = useLanguage();
   const [ack, setAck] = useState(false);
   const [step, setStep] = useState<'warn' | 'auth' | 'result'>('warn');
+  const [revealed, setRevealed] = useState('');
   const rec = kind === 'recovery';
   const title = rec ? 'Show Recovery Phrase' : 'Show View Key';
 
@@ -137,11 +138,22 @@ function SecretReveal({ kind, onBack }: { kind: 'recovery' | 'viewkey'; onBack: 
     return (
       <Screen title={title} onBack={onBack}>
         <SecretPrompt title={t('Confirm it’s you')} cta={t('Continue')} onCancel={onBack}
-          onSubmit={async (secret) => { const r = await authorize(secret); if (!r.ok) return t(r.message ?? 'Incorrect.'); setStep('result'); return null; }} />
+          onSubmit={async (secret) => {
+            const r = await authorize(secret); if (!r.ok) return t(r.message ?? 'Incorrect.');
+            try { if (IS_NATIVE_ANDROID) setRevealed(await nativeEngine().secret(walletId, rec)); }
+            catch { return 'Could not read the native wallet secret. Nothing was exported.'; }
+            setStep('result'); return null;
+          }} />
       </Screen>
     );
   }
   if (step === 'result') {
+    if (IS_NATIVE_ANDROID) return <Screen title={title} onBack={() => { setRevealed(''); onBack(); }}>
+      <Text style={[st.h, { color: c.foreground }]}>{rec ? 'Your recovery phrase' : 'Your private view key'}</Text>
+      {rec ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>{revealed.split(/\s+/).map((word, i) => <View key={i} style={{ width: '47%', backgroundColor: c.charcoal, borderRadius: 12, padding: 12 }}><Text style={{ color: c.foreground, fontFamily: F.m }}>{i + 1}. {word}</Text></View>)}</View> : <Text style={{ color: c.foreground, fontFamily: F.m }}>{revealed}</Text>}
+      <Notice tone="danger" title="Keep this private" body="Write recovery words offline. Do not photograph, copy to a clipboard, or share them." />
+      <Btn testID="secret-done" label={t('Done')} onPress={() => { setRevealed(''); onBack(); }} />
+    </Screen>;
     return (
       <Screen title={title} onBack={onBack}>
         <View style={[st.hero, { backgroundColor: c.charcoal }]}><Feather name="cpu" size={28} color={c.warn} /></View>
@@ -241,7 +253,7 @@ export function EditAccount({ wallet, onBack, onDeleted }: { wallet: WalletState
     setBusy(false);
   };
 
-  if (view === 'recovery' || view === 'viewkey') return <SecretReveal kind={view === 'recovery' ? 'recovery' : 'viewkey'} onBack={main} />;
+  if (view === 'recovery' || view === 'viewkey') return <SecretReveal kind={view === 'recovery' ? 'recovery' : 'viewkey'} walletId={wallet.id} onBack={main} />;
   if (view === 'delete') return <DeleteFlow wallet={wallet} onBack={main} onDeleted={onDeleted} />;
   if (view === 'name') {
     return (

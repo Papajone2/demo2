@@ -1,4 +1,4 @@
-# Native Android wallet — experimental stagenet
+# Native Android wallet — experimental mainnet and stagenet
 
 The Android APK now uses an on-device Expo/Kotlin module calling
 `MrCyjaneK/monero_c v0.18.4.6-RC2` through JNA. Android does **not** use the
@@ -10,14 +10,16 @@ and the separate `monero2014-web` application remain separate.
 
 1. In GitHub Actions open **Native Android APK**, on the native-engine branch
    or the pull request, and open its latest run.
-2. Download **monero2014-stagenet-apk-N** under Artifacts and unzip it.
-3. Verify `SHA256SUMS`, then install `monero2014-stagenet.apk` on Android 8+
+2. Download **monero2014-wallet-apk-N** under Artifacts and unzip it.
+3. Verify `SHA256SUMS`, then install `monero2014-wallet.apk` on Android 8+
    with ARM64 or x86_64. Allow installing from that source when Android asks.
-   Alternatively: `adb install -r monero2014-stagenet.apk`.
+   Alternatively: `adb install -r monero2014-wallet.apk`.
 4. No Expo Go, Metro server, EAS account or JavaScript export is required.
    The app includes native libraries and its bundled application.
 
-Package: `com.monero2014.wallet.stagenet`. This is a standalone release-mode
+Package: `com.monero2014.wallet.stagenet` (retained for in-place upgrades).
+Install over the previous build; **do not uninstall** without an offline backup.
+This is a standalone release-mode
 build signed with the standard Android **development key**, not a production
 signing identity. Do not publish it as a production wallet. Artifacts expire
 after 14 days. A successful compile is not proof of funded-transfer behavior.
@@ -31,7 +33,10 @@ after 14 days. A successful compile is not proof of funded-transfer behavior.
   with random 256-bit passwords wrapped with a non-exportable AES-GCM Android
   Keystore key. Public account metadata is separate. App PIN is an additional
   UI authorization gate, not the wallet encryption password.
-- Real stagenet addresses/subaddresses, native balances and unlocked balances,
+- Explicit mainnet (real money) or stagenet (worthless test coins) selection.
+  Network is stored per wallet; old wallets default to stagenet and are never
+  silently converted. Each network has a separate HTTPS daemon preference.
+- Real addresses/subaddresses, native balances and unlocked balances,
   native transaction history, daemon connection and on-device blockchain scans.
   Simulation credits and fake block advancement are rejected on Android.
 - Native transaction construction/signing and actual-fee review. Confirmation
@@ -41,8 +46,15 @@ after 14 days. A successful compile is not proof of funded-transfer behavior.
   an uncertain-outcome warning and blocks subsequent sends; never automatically
   retry. Resolve uncertain outcomes manually against the node before further
   testing. There is deliberately no unsafe "clear and retry" button.
-- HTTPS daemon configuration under **Real wallets**. New accounts and restores
-  are added there with backup UI. Mainnet is disabled in the native module.
+- HTTPS daemon configuration under **Real wallets**. Original onboarding,
+  recovery-word grid and icon/name customization use real native wallet data.
+- PIN/password checks use Android PBKDF2-SHA256, preserving the existing
+  verifier format, NFKC normalization, salt and 60,000-iteration work factor.
+- Recovery re-reveal and private-view-key display require PIN/password approval;
+  these secrets are not copied to clipboard or exported to servers.
+- Native charts request validated public CoinGecko observations directly,
+  with real Kraken candle observations as a fallback. No hosted API configuration
+  is required for Android. Missing prices are not invented.
 - Screenshots are blocked, OS backup is disabled, and wallets close when the
   app backgrounds. Rooted/compromised devices remain outside these protections.
 
@@ -56,7 +68,8 @@ bundled frontend, then verifies its APK signature before uploading it.
 
 An Android emulator instrumentation step exercises the actual native engine
 offline: Polyseed creation, encrypted file persistence, close/reopen,
-restore-to-same-address, subaddresses, no-send-before-sync and HTTPS rejection.
+restore-to-same-address, subaddresses, mainnet/stagenet isolation, secret display,
+native PIN compatibility/timing, no-send-before-sync and HTTPS rejection.
 That does not replace real device/network testing.
 
 Local reproduction, using Node 24.22.1, pnpm 10.26.1, JDK 17 and Android SDK:
@@ -80,11 +93,13 @@ backgrounding, interruption during writes, wrong PINs, full uninstall/restore,
 and repeated create/delete cycles on physical devices. The upstream C API does
 not expose transaction disposal; repeated draft creation needs memory profiling
 and upstream cleanup support before production. Native file-write atomicity and
-corruption recovery need fault-injection testing. Recovery re-reveal and private
-view-key export in the old account UI are not implemented by this bridge.
+corruption recovery need fault-injection testing. This build enables experimental
+mainnet at the user's request; a successful build and offline tests are **not**
+evidence of funded mainnet receipt, send, confirmation or production readiness.
 
 Complete the native license/notice inventory and supply-chain review described
 in `modules/monero-engine/THIRD-PARTY.md`. Use a privately managed production
 signing identity only through a secrets flow, never source control or chat.
-Keep mainnet disabled until independent wallet-security review and device
-acceptance criteria pass. Never use a funded recovery phrase in automated tests.
+Do not treat this as a production wallet before independent wallet-security
+review and device acceptance criteria pass. Never use a funded recovery phrase
+in automated tests.

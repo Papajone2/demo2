@@ -21,7 +21,7 @@ import org.json.JSONObject
  * All JNI/JNA access is serialized. Wallet files are Monero-encrypted with random
  * passwords wrapped by a non-exportable Android Keystore key. No seed/key leaves
  * the device and no wallet RPC process or shared signing server is used.
- * This first native build is deliberately STAGENET ONLY (network type 2).
+ * Network is immutable per wallet: mainnet 0 or stagenet 2; legacy entries stay stagenet.
  */
 internal class WalletEngine(private val context: Context) {
   private val api get() = WalletApi.instance
@@ -33,7 +33,9 @@ internal class WalletEngine(private val context: Context) {
   private var pending: Pointer? = null
   private var quote: Map<String, Any>? = null
   private var connected = false
-  private val network = 2
+  private var network = 2
+  private fun defaultDaemon() = if (network == 0) "https://xmr.nodely.dev:18089" else "https://xmr.nodely.dev:38089"
+  private fun networkLabel() = if (network == 0) "mainnet" else "stagenet"
 
   private fun text(p: Pointer): String = try { p.getString(0, "UTF-8") } finally { api.MONERO_free(p) }
   private fun current() = wallet ?: error("Unlock and select a native wallet first.")
@@ -81,11 +83,15 @@ internal class WalletEngine(private val context: Context) {
     val items = catalog()
     return (0 until items.length()).map { i ->
       val o = items.getJSONObject(i)
-      mapOf("id" to o.getString("id"), "name" to o.getString("name"), "iconId" to o.optString("iconId", "monero"))
+      mapOf("id" to o.getString("id"), "name" to o.getString("name"), "iconId" to o.optString("iconId", "monero"),
+        "network" to if (o.optInt("network", 2) == 0) "mainnet" else "stagenet",
+        "needsCustomization" to o.optBoolean("needsCustomization", false))
     }.sortedBy { if (it["id"] == prefs.getString("selected", null)) 0 else 1 }
   }
-  @Synchronized fun create(name: String, seed: String, height: String): Map<String, Any> {
+  @Synchronized fun create(name: String, seed: String, height: String, networkType: Int = 2): Map<String, Any> {
+    require(networkType == 0 || networkType == 2) { "Choose mainnet or stagenet." }
     close()
+    network = networkType
     api.MONERO_WalletManagerFactory_setLogLevel(-1)
     val restoreHeight = height.toLongOrNull()
     require(restoreHeight != null && restoreHeight >= 0) { "Invalid restore height." }
@@ -104,7 +110,8 @@ internal class WalletEngine(private val context: Context) {
       selected = id
       store()
       val items = catalog()
-      items.put(JSONObject().put("id", id).put("name", name.take(16).ifBlank { "Wallet ${items.length() + 1}" }).put("iconId", "monero"))
+      items.put(JSONObject().put("id", id).put("name", name.take(16).ifBlank { "Wallet ${items.length() + 1}" }).put("iconId", "monero")
+        .put("network", network).put("needsCustomization", true))
       writeCatalog(items)
       check(prefs.edit().putString("selected", id).commit())
       // Deliberately no daemon call here: backup must work without network access.
@@ -121,6 +128,7 @@ internal class WalletEngine(private val context: Context) {
     if (selected == id && wallet != null) return snapshot()
     close()
     require(list().any { it["id"] == id }) { "Account not found." }
+    network = if (list().first { it["id"] == id }["network"] == "mainnet") 0 else 2
     val w = api.MONERO_WalletManager_openWallet(manager, path(id), password(id), network)
     try { checkWallet(w) } catch (e: Exception) { w?.let { api.MONERO_WalletManager_closeWallet(manager, it, 0) }; throw e }
     wallet = w; selected = id
@@ -130,16 +138,16 @@ internal class WalletEngine(private val context: Context) {
   @Synchronized fun connect(url: String) {
     val uri = URI(url)
     require(uri.scheme == "https" && uri.host != null && uri.userInfo == null && uri.query == null && uri.fragment == null) {
-      "Use an HTTPS stagenet daemon URL without credentials."
+      "Use an HTTPS ${networkLabel()} daemon URL without credentials."
     }
     val w = current()
     connected = false
-    check(api.MONERO_Wallet_init(w, url, 0, "", "", 1, 0, "") != 0.toByte()) { "Could not connect to stagenet daemon." }
+    check(api.MONERO_Wallet_init(w, url, 0, "", "", 1, 0, "") != 0.toByte()) { "Could not connect to ${networkLabel()} daemon." }
     api.MONERO_Wallet_setTrustedDaemon(w, 0)
     api.MONERO_Wallet_startRefresh(w)
     api.MONERO_Wallet_refreshAsync(w)
     connected = true
-    check(prefs.edit().putString("daemon", url).commit())
+    check(prefs.edit().putString("daemon-$network", url).commit())
   }
   @Synchronized fun snapshot(): Map<String, Any> {
     val w = current()
@@ -164,7 +172,9 @@ internal class WalletEngine(private val context: Context) {
       "height" to api.MONERO_Wallet_blockChainHeight(w).toDouble(),
       "target" to if (connected) api.MONERO_Wallet_daemonBlockChainHeight(w).toDouble() else 0.0,
       "complete" to (connected && api.MONERO_Wallet_synchronized(w) != 0.toByte()),
-      "daemon" to (prefs.getString("daemon", "https://xmr.nodely.dev:38089")!!),
+      "network" to networkLabel(),
+      "daemon" to (prefs.getString("daemon-$network",
+        if (network == 2) prefs.getString("daemon", defaultDaemon()) else defaultDaemon())!!),
       "broadcastWarning" to (prefs.getString("broadcast-$selected", "")!!))
   }
   @Synchronized fun subaddress(): Map<String, Any> {
@@ -172,11 +182,24 @@ internal class WalletEngine(private val context: Context) {
     checkWallet(current()); store()
     return snapshot()
   }
+  @Synchronized fun secret(id: String, recovery: Boolean): String {
+    val account = list().firstOrNull { it["id"] == id } ?: error("Account not found.")
+    val temporary = id != selected
+    val target = if (!temporary) current() else api.MONERO_WalletManager_openWallet(
+      manager, path(id), password(id), if (account["network"] == "mainnet") 0 else 2)
+    try {
+      checkWallet(target)
+      val w = requireNotNull(target)
+      if (!recovery) return text(api.MONERO_Wallet_secretViewKey(w))
+      val polyseed = text(api.MONERO_Wallet_getPolyseed(w, ""))
+      return if (polyseed.isNotBlank()) polyseed else text(api.MONERO_Wallet_seed(w, ""))
+    } finally { if (temporary && target != null) api.MONERO_WalletManager_closeWallet(manager, target, 0) }
+  }
   @Synchronized fun profile(id: String, name: String, icon: String) {
     require(name.isNotBlank() && name.codePointCount(0, name.length) <= 16) { "Use 1–16 characters." }
     val items = catalog()
     for (i in 0 until items.length()) if (items.getJSONObject(i).getString("id") == id) {
-      items.getJSONObject(i).put("name", name).put("iconId", icon)
+      items.getJSONObject(i).put("name", name).put("iconId", icon).put("needsCustomization", false)
     }
     writeCatalog(items)
   }
@@ -193,17 +216,18 @@ internal class WalletEngine(private val context: Context) {
   @Synchronized fun prepare(address: String, atomic: String): Map<String, Any> {
     check(pending == null) { "Discard the previous review before preparing another payment." }
     check(!prefs.contains("broadcast-$selected")) { "An earlier broadcast has an uncertain outcome. Check its transaction hash before sending again." }
-    check(connected && api.MONERO_Wallet_synchronized(current()) != 0.toByte()) { "Finish stagenet scanning before sending." }
-    require(api.MONERO_Wallet_addressValid(address, network) != 0.toByte()) { "Invalid stagenet address." }
-    val amount = atomic.toLongOrNull()
-    require(amount != null && amount > 0) { "Invalid atomic amount." }
+    check(connected && api.MONERO_Wallet_synchronized(current()) != 0.toByte()) { "Finish ${networkLabel()} scanning before sending." }
+    require(api.MONERO_Wallet_addressValid(address, network) != 0.toByte()) { "Invalid ${networkLabel()} address." }
+    val sweep = atomic == "MAX"
+    val amount = if (sweep) 0L else atomic.toLongOrNull()
+    require(amount != null && (sweep || amount > 0)) { "Invalid atomic amount." }
     val tx = api.MONERO_Wallet_createTransaction(current(), address, "", amount, 0, 0, 0, "", ";")
       ?: error("Could not prepare transaction.")
     pending = tx
     check(api.MONERO_PendingTransaction_status(tx) == 0) { "Transaction preparation failed. Check unlocked balance and daemon." }
     check(api.MONERO_PendingTransaction_txCount(tx) == 1L) { "Split transactions are not supported in this first native build." }
     val actualAmount = java.lang.Long.toUnsignedString(api.MONERO_PendingTransaction_amount(tx))
-    check(actualAmount == atomic) { "Engine amount differs from requested amount." }
+    check(if (sweep) actualAmount.toBigInteger() > java.math.BigInteger.ZERO else actualAmount == atomic) { "Engine amount differs from requested amount." }
     val review = mapOf<String, Any>("token" to UUID.randomUUID().toString(), "address" to address, "amount" to actualAmount,
       "fee" to java.lang.Long.toUnsignedString(api.MONERO_PendingTransaction_fee(tx)),
       "txid" to text(api.MONERO_PendingTransaction_txid(tx, ";")))

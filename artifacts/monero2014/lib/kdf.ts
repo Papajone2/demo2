@@ -3,6 +3,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils.js';
 import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
+import { nativeEngine } from './native-engine';
 
 export type LockMethod = 'pin' | 'password';
 export type Verifier = {
@@ -20,6 +21,7 @@ export type Verifier = {
 export const ITERATIONS = 60000;
 
 async function derive(secret: string, salt: Uint8Array, iterations: number) {
+  if (Platform.OS === 'android') return nativeEngine().deriveSecret(secret.normalize('NFKC'), bytesToHex(salt), iterations);
   const out = await pbkdf2Async(sha256, utf8ToBytes(secret.normalize('NFKC')), salt, {
     c: iterations,
     dkLen: 32,
