@@ -58,6 +58,7 @@ Thumbs.db
 .local/
 /artifacts/monero2014/android/
 /artifacts/monero2014/modules/monero-engine/android/src/main/jniLibs/
+/artifacts/monero2014/modules/monero-engine/android/src/main/assets/native-licenses/
 /artifacts/monero2014/modules/monero-engine/android/build/
 /artifacts/monero2014/modules/monero-engine/android/.cxx/
 __pycache__/

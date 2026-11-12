@@ -164,7 +164,7 @@ internal class WalletEngine(private val context: Context) {
       "height" to api.MONERO_Wallet_blockChainHeight(w).toDouble(),
       "target" to if (connected) api.MONERO_Wallet_daemonBlockChainHeight(w).toDouble() else 0.0,
       "complete" to (connected && api.MONERO_Wallet_synchronized(w) != 0.toByte()),
-      "daemon" to (prefs.getString("daemon", "https://stagenet.xmr-tw.org:38089")!!),
+      "daemon" to (prefs.getString("daemon", "https://xmr.nodely.dev:38089")!!),
       "broadcastWarning" to (prefs.getString("broadcast-$selected", "")!!))
   }
   @Synchronized fun subaddress(): Map<String, Any> {
@@ -227,6 +227,7 @@ internal class WalletEngine(private val context: Context) {
     return hash
   }
   @Synchronized fun discard() {
+    if (pending == null && quote == null) return
     // monero_c does not expose disposeTransaction. Reopen to invalidate the
     // review and release wallet-owned state; never reuse its transaction token.
     val id = selected

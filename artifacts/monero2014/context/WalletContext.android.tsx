@@ -47,7 +47,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         const s = await engine.open(list[0].id);
         publish(s);
         // Failed connection must not fabricate sync progress or balances.
-        await engine.connect(s.daemon);
+        try { await engine.connect(s.daemon); } catch {
+          // Keep the encrypted wallet accessible offline. Sync stays incomplete;
+          // the Real wallets screen lets the user configure/retry the daemon.
+        }
         publish(await engine.snapshot());
       } else setSnapshot(null);
     }).catch(e => mounted.current && setError(e instanceof Error ? e.message : 'Native engine failed.'))
@@ -85,7 +88,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         if (signal?.aborted) throw new Error('Switch cancelled.');
         const s = await nativeEngine().open(id);
         publish(s);
-        await nativeEngine().connect(s.daemon);
+        try { await nativeEngine().connect(s.daemon); } catch { /* Offline: sending stays disabled. */ }
       });
     },
     // Native account creation must pass through backup UI, never silently discard a seed.
@@ -109,7 +112,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         if (snapshot?.id === id) {
           if (list.length) {
             const s = await nativeEngine().open(list[0].id); publish(s);
-            await nativeEngine().connect(s.daemon);
+            try { await nativeEngine().connect(s.daemon); } catch { /* Offline: sending stays disabled. */ }
           } else setSnapshot(null);
         }
       });

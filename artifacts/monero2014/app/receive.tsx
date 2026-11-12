@@ -1,3 +1,4 @@
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
 import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Stack } from 'expo-router';
@@ -68,7 +69,7 @@ function Receive() {
         <Text style={{ fontFamily: F.s, fontSize: 13, color: isCurrent ? c.primary : c.mutedForeground }}>{isCurrent ? t('Current address') : t('Saved address')}</Text>
         <Text selectable testID="receive-address" style={[st.addr, { color: c.foreground }]}>{shown}</Text>
         <QrCode testID="receive-qr" value={shown} size={208} />
-        <Text testID="receive-disclosure" style={{ fontFamily: F.r, fontSize: 12.5, color: c.mutedForeground }}>{t('Preview address · not for real deposits')}</Text>
+        <Text testID="receive-disclosure" style={{ fontFamily: F.r, fontSize: 12.5, color: c.mutedForeground }}>{IS_NATIVE_ANDROID ? 'Native STAGENET address · test coins only' : t('Preview address · not for real deposits')}</Text>
       </View>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <Btn testID="copy-address" label={copied ? t('Copied') : t('Copy')} icon={copied ? 'check' : 'copy'} variant="soft" onPress={copy} style={{ flex: 1 }} />

@@ -1,3 +1,4 @@
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
 import { Feather } from '@expo/vector-icons';
 import { getGetMoneroHistoryQueryKey, useGetMoneroHistory, type GetMoneroHistoryCurrency } from '@workspace/api-client-react';
 import { Image } from 'expo-image';
@@ -134,8 +135,8 @@ function Overview() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Feather name={sync.complete ? 'check-circle' : 'refresh-cw'} size={16} color={sync.complete ? c.success : c.primary} />
             <Text style={{ fontFamily: F.s, fontSize: 16, color: c.foreground, flex: 1 }}>{sync.complete ? t('Synced') : t('Syncing')}</Text>
-            <Text testID="sync-status" style={[st.num, { fontSize: 13, color: c.mutedForeground }]}>{sync.complete ? '100%' : `${Math.round(sync.progress * 100)}% \u00b7 ~${sync.remainingSeconds}s`}</Text>
-            <View style={[st.tag, { backgroundColor: c.secondary }]}><Text style={{ fontFamily: F.s, fontSize: 11, color: c.mutedForeground }}>{t('Preview')}</Text></View>
+            <Text testID="sync-status" style={[st.num, { fontSize: 13, color: c.mutedForeground }]}>{sync.complete ? '100%' : IS_NATIVE_ANDROID ? `${Math.round(sync.progress * 100)}%` : `${Math.round(sync.progress * 100)}% \u00b7 ~${sync.remainingSeconds}s`}</Text>
+            <View style={[st.tag, { backgroundColor: c.secondary }]}><Text style={{ fontFamily: F.s, fontSize: 11, color: c.mutedForeground }}>{IS_NATIVE_ANDROID ? 'Stagenet' : t('Preview')}</Text></View>
           </View>
           <View style={[st.track, { backgroundColor: c.secondary }]} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(sync.progress * 100) }}>
             <View style={{ width: `${Math.min(100, sync.progress * 100)}%`, height: '100%', borderRadius: 3, backgroundColor: sync.complete ? c.success : c.primary }} />

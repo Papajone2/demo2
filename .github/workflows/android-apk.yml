@@ -3,8 +3,6 @@ name: Native Android APK
 on:
   push:
     branches: [wallet-source, native-android-engine]
-  pull_request:
-    branches: [wallet-source]
   workflow_dispatch:
 
 permissions:
@@ -98,7 +96,19 @@ jobs:
           profile: pixel_2
           disable-animations: true
           working-directory: artifacts/monero2014/android
-          script: ./gradlew :monero-engine:connectedDebugAndroidTest -PreactNativeArchitectures=x86_64 --no-daemon --max-workers=2 --stacktrace
+          script: |
+            ./gradlew :monero-engine:connectedDebugAndroidTest -PreactNativeArchitectures=x86_64 --no-daemon --max-workers=2 --stacktrace
+            adb install -r app/build/outputs/apk/release/app-release.apk
+            adb shell am start -n com.monero2014.wallet.stagenet/.MainActivity
+            sleep 15
+            adb shell pidof com.monero2014.wallet.stagenet
+            adb exec-out screencap -p > "$GITHUB_WORKSPACE/generated-artifacts/native-android/native-launch.png"
+      - name: Upload fresh-install launch evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-launch-evidence
+          path: generated-artifacts/native-android/native-launch.png
+          if-no-files-found: error
       - name: Upload native instrumentation reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -1,3 +1,4 @@
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
@@ -101,9 +102,9 @@ function Security({ onTor }: { onTor: () => void }) {
         <GRow testID="change-secret" icon="refresh-cw" title={t('Change PIN or password')} onPress={lock.startChange} />
         <GRow testID="security-tor" icon="eye-off" title={t('Tor')} value={t('Unavailable')} onPress={onTor} />
       </Group>
-      <Notice tone="info" icon="info" title={t('What the lock protects')} body={t('The app lock gates this preview and re-confirms deletes and secret screens. It does not encrypt wallet data, and a forgotten secret cannot be recovered.')} />
+      <Notice tone="info" icon="info" title={t('What the lock protects')} body={IS_NATIVE_ANDROID ? 'Wallet files are encrypted with a random password protected by Android Keystore. Your app PIN separately gates access and payment confirmation; it is not your recovery backup.' : t('The app lock gates this preview and re-confirms deletes and secret screens. It does not encrypt wallet data, and a forgotten secret cannot be recovered.')} />
       <Group>
-        <GRow icon="key" title={t('16-word Polyseed backup')} sub={t('Requires native engine — not generated')} onPress={() => router.push('/engine')} />
+        <GRow icon="key" title={t('16-word Polyseed backup')} sub={IS_NATIVE_ANDROID ? 'Generated on-device during native setup' : t('Requires native engine — not generated')} onPress={() => router.push('/engine')} />
         <GRow icon="cpu" title={t('Native Monero engine')} sub={t('Unavailable in this build')} onPress={() => router.push('/engine')} />
       </Group>
     </Scroll>

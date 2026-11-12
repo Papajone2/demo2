@@ -9,7 +9,7 @@ import { useColors } from '@/hooks/useColors';
 export function NativeEngineScreen() {
   const c = useColors();
   const { reload, state, sync } = useWallet();
-  const [url, setUrl] = useState('https://stagenet.xmr-tw.org:38089');
+  const [url, setUrl] = useState('https://xmr.nodely.dev:38089');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [setup, setSetup] = useState(false);

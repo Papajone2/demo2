@@ -61,6 +61,7 @@ jobs:
           compile a native application, add a Monero engine, sign transactions,
           verify device behavior or enable mainnet.
 
-          The Android interface still uses simulated wallet operations.
+          This JavaScript-only check cannot exercise the Android native engine.
+          Use the separate Native Android APK workflow for an installable APK.
           See `artifacts/monero2014/NATIVE-WALLET.md` for native requirements.
           EOF
