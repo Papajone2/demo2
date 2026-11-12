@@ -27,36 +27,66 @@ after 14 days. A successful compile is not proof of funded-transfer behavior.
 ## Implemented native path
 
 - Fresh 16-word Polyseed generation and native 16/25-word restoration with a
-  restore height. Backup words stay in transient setup state, not clipboard,
-  logs, AsyncStorage, server requests or build artifacts.
+  restore height. A year/month helper provides a conservative estimated starting
+  height, or scan from genesis if unsure. Word dictionaries flag unknown entries
+  on blur; the native engine performs final phrase/checksum validation.
+  Backup words stay in transient setup state, never logs, AsyncStorage, server
+  requests or build artifacts. Explicit Copy is available with a clipboard risk
+  notice and a best-effort 60-second conditional clear while the process survives.
 - Monero-encrypted wallet files in Android's no-backup directory, protected
   with random 256-bit passwords wrapped with a non-exportable AES-GCM Android
   Keystore key. Public account metadata is separate. App PIN is an additional
   UI authorization gate, not the wallet encryption password.
-- Explicit mainnet (real money) or stagenet (worthless test coins) selection.
+- New UI-created wallets use mainnet without repetitive network labels.
   Network is stored per wallet; old wallets default to stagenet and are never
-  silently converted. Each network has a separate HTTPS daemon preference.
+  silently converted. Existing test wallets retain a "not for real deposits"
+  marker; it would be unsafe to relabel them as real wallets.
 - Real addresses/subaddresses, native balances and unlocked balances,
   native transaction history, daemon connection and on-device blockchain scans.
   Simulation credits and fake block advancement are rejected on Android.
 - Native transaction construction/signing and actual-fee review. Confirmation
-  requires the existing app PIN/password; it commits the retained transaction,
+  does not ask for an extra PIN in an already unlocked session; it commits the retained transaction,
   not a reconstructed payment. A one-use token prevents duplicate confirmation.
 - Before broadcast, persist a public transaction hash. A timeout/error retains
   an uncertain-outcome warning and blocks subsequent sends; never automatically
-  retry. Resolve uncertain outcomes manually against the node before further
-  testing. There is deliberately no unsafe "clear and retry" button.
-- HTTPS daemon configuration under **Real wallets**. Original onboarding,
+  retry. Chain inclusion (at least one real confirmation) can clear that warning.
+  There is deliberately no unsafe "clear and retry" button.
+- Node configuration under **Security & Privacy → Nodes & Tor**. Original onboarding,
   recovery-word grid and icon/name customization use real native wallet data.
 - PIN/password checks use Android PBKDF2-SHA256, preserving the existing
   verifier format, NFKC normalization, salt and 60,000-iteration work factor.
 - Recovery re-reveal and private-view-key display require PIN/password approval;
-  these secrets are not copied to clipboard or exported to servers.
+  recovery copy is explicit, warned, and conditionally cleared; private view keys
+  are not copied by the app. Neither is exported to servers.
 - Native charts request validated public CoinGecko observations directly,
   with real Kraken candle observations as a fallback. No hosted API configuration
-  is required for Android. Missing prices are not invented.
+  is required for Android. Missing prices are not invented. Display currencies
+  include USD/EUR/GBP/CHF/INR; Hindi suggests INR for a new wallet, but language
+  and currency can be changed independently.
+- Tor mode requires separately installed Orbot, SOCKS5 on 127.0.0.1:9050 and a
+  user-supplied v3 onion daemon. Native wallet connections use that proxy only,
+  reject public nodes and never silently fall back. Price requests are aborted
+  and disabled in Tor mode (no direct market DNS or HTTP fallback). This is NOT
+  an embedded Tor service or a device-wide VPN. A successful onion session has
+  not yet been exercised end to end; instrumentation checks fail-closed behavior.
+- Auto-lock defaults to five minutes of inactivity, including background time.
+  Disable it to keep the session until process death. Five incorrect attempts
+  trigger 1 minute, then 5 minutes, then 1 hour, cycling; correct unlock resets.
+- An optional destruction secret is off by default, requires current-secret
+  approval and a backup warning to configure. Entering it on the lock screen
+  deletes ALL local wallets/keys. It cannot erase the blockchain, external copies
+  or guarantee secure flash erasure. Do not test it on funded accounts.
+- QR payment scanning is permission-gated. Max fills an actual engine-quoted
+  amount after fee; fiat entry converts with integer atomic arithmetic. The
+  final review always shows exact XMR amounts and fees.
+- Main balances stay Pending until scans finish, pending incoming funds appear
+  separately, history is newest-first, and confirmation counts come from the
+  native wallet. Time-to-confirm is an estimate based on two-minute blocks,
+  never a promise. The app cannot accelerate Monero's confirmation rules.
 - Screenshots are blocked, OS backup is disabled, and wallets close when the
-  app backgrounds. Rooted/compromised devices remain outside these protections.
+  app backgrounds. Native networking is blocked until foreground resume, even
+  if stale JavaScript work remains queued. No background mining or foreground
+  service is added. Rooted/compromised devices remain outside these protections.
 
 ## Build and verification
 

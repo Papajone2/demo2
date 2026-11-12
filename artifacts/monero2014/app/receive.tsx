@@ -31,7 +31,7 @@ function Receive() {
   if (!state) return null;
 
   const shown = viewing && state.addresses.includes(viewing) ? viewing : state.receiveAddress;
-  const isCurrent = shown === state.receiveAddress;
+  const isCurrent = true; // "Current" is the address currently selected for display.
   const list = [...state.addresses].reverse();
 
   const copy = async () => {
@@ -69,7 +69,7 @@ function Receive() {
         <Text style={{ fontFamily: F.s, fontSize: 13, color: isCurrent ? c.primary : c.mutedForeground }}>{isCurrent ? t('Current address') : t('Saved address')}</Text>
         <Text selectable testID="receive-address" style={[st.addr, { color: c.foreground }]}>{shown}</Text>
         <QrCode testID="receive-qr" value={shown} size={208} />
-        <Text testID="receive-disclosure" style={{ fontFamily: F.r, fontSize: 12.5, color: c.mutedForeground }}>{IS_NATIVE_ANDROID ? state.network === 'mainnet' ? 'MAINNET · real XMR address. Verify the complete address.' : 'STAGENET · test coins only' : t('Preview address · not for real deposits')}</Text>
+        {!IS_NATIVE_ANDROID || state.network === 'stagenet' ? <Text testID="receive-disclosure" style={{ fontFamily: F.r, fontSize: 12.5, color: c.mutedForeground }}>{IS_NATIVE_ANDROID ? t('Test wallet · not for real deposits') : t('Preview address · not for real deposits')}</Text> : null}
       </View>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <Btn testID="copy-address" label={copied ? t('Copied') : t('Copy')} icon={copied ? 'check' : 'copy'} variant="soft" onPress={copy} style={{ flex: 1 }} />
@@ -82,9 +82,9 @@ function Receive() {
           const on = a === shown;
           return (
             <Pressable key={a} testID={`saved-address-${a}`} onPress={() => { tap(); setViewing(a); setCopied(false); scroll.current?.scrollTo({ y: 0, animated: true }); }} style={({ pressed }) => [st.row, pressed && { backgroundColor: c.secondary }]}>
-              <Feather name={on ? 'check-circle' : 'hash'} size={16} color={on ? c.primary : c.mutedForeground} />
+              {on ? <Feather name="check-circle" size={16} color={c.primary} /> : <Text style={{ color: c.mutedForeground, fontFamily: F.m }}>#{state.addresses.indexOf(a) + 1}</Text>}
               <Text numberOfLines={1} style={{ flex: 1, fontFamily: F.m, fontSize: 14, color: c.foreground }}>{a}</Text>
-              {a === state.receiveAddress ? <Text style={{ fontFamily: F.s, fontSize: 12, color: c.primary }}>{t('Current')}</Text> : null}
+              {on ? <Text style={{ fontFamily: F.s, fontSize: 12, color: c.primary }}>{t('Current')}</Text> : null}
             </Pressable>
           );
         })}

@@ -14,12 +14,13 @@ import { EmptyState, F, tap, TxRow, useInsets, WalletGate } from '@/components/u
 import { REQUIRED_CONFIRMATIONS, useWallet } from '@/context/WalletContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
-import { ATOMIC_PER_XMR, currencySymbol, formatXmr } from '@/lib/money';
+import { ATOMIC_PER_XMR, compactXmr, currencySymbol, formatXmr } from '@/lib/money';
+import { SyncDetails } from '@/components/sync-details';
 
 const BG = require('@/assets/images/monero-background.png');
 const DIM = 'rgba(0,0,0,0.55)';
 const HIDDEN = '••••';
-const MARKET: Record<string, GetMoneroHistoryCurrency> = { USD: 'usd', EUR: 'eur', GBP: 'gbp' };
+const MARKET: Record<string, GetMoneroHistoryCurrency> = { USD: 'usd', EUR: 'eur', GBP: 'gbp', INR: 'inr', CHF: 'chf' };
 
 function money(v: number, sym: string) {
   const sign = v < 0 ? '-' : '';
@@ -101,7 +102,8 @@ function Overview() {
   if (!state) return null;
   const sym = currencySymbol(state.currency);
   const hide = state.hideBalance;
-  const recent = state.txs.slice(0, 3);
+  const recent = [...state.txs].sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
+  const pendingIncoming = state.txs.filter(tx => tx.kind === 'in' && tx.confirmations < REQUIRED_CONFIRMATIONS).reduce((sum, tx) => sum + BigInt(tx.amount), 0n);
   const qty = Number(available) / Number(ATOMIC_PER_XMR);
   const m = mc && market.data && !market.isError ? market.data : null;
   const fiat = qty === 0 ? money(0, sym) : m ? money(qty * m.price, sym) : null;
@@ -137,7 +139,6 @@ function Overview() {
             <Feather name={sync.complete ? 'check-circle' : 'refresh-cw'} size={16} color={sync.complete ? c.success : c.primary} />
             <Text style={{ fontFamily: F.s, fontSize: 16, color: c.foreground, flex: 1 }}>{sync.complete ? t('Synced') : t('Syncing')}</Text>
             <Text testID="sync-status" style={[st.num, { fontSize: 13, color: c.mutedForeground }]}>{sync.complete ? '100%' : IS_NATIVE_ANDROID ? `${Math.round(sync.progress * 100)}%` : `${Math.round(sync.progress * 100)}% \u00b7 ~${sync.remainingSeconds}s`}</Text>
-            <View style={[st.tag, { backgroundColor: c.secondary }]}><Text style={{ fontFamily: F.s, fontSize: 11, color: c.mutedForeground }}>{IS_NATIVE_ANDROID ? state.network === 'mainnet' ? 'Mainnet' : 'Stagenet' : t('Preview')}</Text></View>
           </View>
           <View style={[st.track, { backgroundColor: c.secondary }]} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(sync.progress * 100) }}>
             <View style={{ width: `${Math.min(100, sync.progress * 100)}%`, height: '100%', borderRadius: 3, backgroundColor: sync.complete ? c.success : c.primary }} />
@@ -188,12 +189,12 @@ function Overview() {
               <View style={[st.skel, { width: 230, height: 54, backgroundColor: c.charcoal }]} />
             ) : (
               <Text testID="fiat-total" adjustsFontSizeToFit numberOfLines={1} style={[st.fiat, st.shadow, { color: c.foreground }]}>
-                {hide ? `${sym}${HIDDEN}` : fiat ?? `${sym}—`}
+                {hide ? `${sym}${HIDDEN}` : !sync.complete ? t('Pending') : fiat ?? `${sym}—`}
               </Text>
             )}
             {hide ? (
               <Text style={[st.gainTxt, st.shadow, { color: c.mutedForeground, marginTop: 10 }]}>{HIDDEN}</Text>
-            ) : m ? (
+            ) : m && sync.complete ? (
               <View style={st.gainRow}>
                 <Feather name={up ? 'trending-up' : 'trending-down'} size={16} color={tone} />
                 <Text style={[st.gainTxt, st.shadow, { color: tone }]}>{signed(valueChange, sym)}</Text>
@@ -207,6 +208,7 @@ function Overview() {
           </Pressable>
         </Animated.View>
 
+        {!hide && sync.complete && pendingIncoming > 0n ? <Text style={{ textAlign: 'center', color: c.primary, fontFamily: F.m, marginBottom: 12 }}>+{compactXmr(pendingIncoming, state.rateCents ? BigInt(state.rateCents) : null)} XMR · {t('Pending')}</Text> : null}
         <View style={[st.actions, actionsUp && st.raised]} onLayout={setL('actions')}>
           <View onLayout={setL('send')} style={st.actionWrap}>
           {sendBtn()}
@@ -226,8 +228,8 @@ function Overview() {
               <Text style={{ fontFamily: F.r, fontSize: 13.5, color: c.mutedForeground }}>XMR</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[st.num, { fontSize: 17, color: c.foreground }]}>{hide ? HIDDEN : formatXmr(available, 4, 4)}</Text>
-              <Text style={[st.num, { fontSize: 13.5, color: c.mutedForeground }]}>{hide ? HIDDEN : fiat ?? '—'}</Text>
+              <Text style={[st.num, { fontSize: 17, color: c.foreground }]}>{hide ? HIDDEN : !sync.complete ? t('Pending') : compactXmr(available, state.rateCents ? BigInt(state.rateCents) : null)}</Text>
+              <Text style={[st.num, { fontSize: 13.5, color: c.mutedForeground }]}>{hide ? HIDDEN : !sync.complete ? '—' : fiat ?? '—'}</Text>
             </View>
           </View>
           <View style={st.profit}>
@@ -268,11 +270,6 @@ function Overview() {
             ) : null}
           </View>
         </Pressable>
-        {m ? (
-          <Text style={{ fontFamily: F.r, fontSize: 11, color: c.mutedForeground, marginTop: 8, textAlign: 'right' }}>
-            {t('Updated {time}', { time: updated })}{m.stale ? ` · ${t('Delayed')}` : ''}
-          </Text>
-        ) : null}
 
         <View style={st.recentHead}>
           <Text style={{ fontFamily: F.s, fontSize: 19, color: c.foreground }}>{t('Recent Activity')}</Text>
@@ -290,7 +287,7 @@ function Overview() {
         </View>
 
         <View onLayout={setL('sync')} testID="sync-section" style={[st.syncCard, { backgroundColor: c.card }, target === 'sync' && st.raised]}>
-          {syncBody()}
+          <SyncDetails>{syncBody()}</SyncDetails>
         </View>
         {/* Scroll-content dim: absolute sibling above every normal sibling; only the raised original target sits above it. */}
         {touring ? <View testID="tour-dim" onStartShouldSetResponder={() => true} style={[StyleSheet.absoluteFill, { backgroundColor: DIM, zIndex: 10 }]} /> : null}

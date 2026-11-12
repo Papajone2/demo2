@@ -6,7 +6,7 @@ export const IS_NATIVE_ANDROID = Platform.OS === 'android';
 export type NativeAccount = { id: string; name: string; iconId: string; network: 'mainnet' | 'stagenet'; needsCustomization: boolean };
 export type NativeSnapshot = {
   id: string; address: string; addresses: string[]; txs: Tx[]; available: string; total: string;
-  height: number; target: number; complete: boolean; daemon: string; broadcastWarning: string; network: 'mainnet' | 'stagenet';
+  height: number; target: number; complete: boolean; daemon: string; broadcastWarning: string; network: 'mainnet' | 'stagenet'; tor: boolean;
 };
 export type NativeQuote = { token: string; address: string; amount: string; fee: string; txid: string };
 type Engine = {
@@ -15,6 +15,8 @@ type Engine = {
   deriveSecret(secret: string, salt: string, iterations: number): Promise<string>;
   open(id: string): Promise<NativeSnapshot>;
   connect(url: string): Promise<void>;
+  privacy(): Promise<{ tor: boolean }>;
+  configureNode(url: string, tor: boolean): Promise<void>;
   snapshot(): Promise<NativeSnapshot>;
   subaddress(): Promise<NativeSnapshot>;
   profile(id: string, name: string, icon: string): Promise<void>;

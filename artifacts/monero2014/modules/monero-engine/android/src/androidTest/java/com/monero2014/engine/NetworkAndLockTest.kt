@@ -9,6 +9,34 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class NetworkAndLockTest {
+  @Test fun torPolicyFailsClosedAndBackgroundStopsSync() {
+    assertEquals("https", validateNode("https://example.com:18089", false).scheme)
+    for (url in listOf("http://example.com", "https://user:pass@example.com", "https://example.com?x=1")) {
+      assertTrue(runCatching { validateNode(url, false) }.isFailure)
+    }
+    assertTrue(runCatching { validateNode("https://example.com", true) }.isFailure)
+    assertTrue(runCatching { validateNode("http://short.onion", true) }.isFailure)
+    val onion = "http://" + "a".repeat(56) + ".onion:18081"
+    assertEquals("http", validateNode(onion, true).scheme)
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    val engine = WalletEngine(context)
+    engine.erase()
+    try {
+      val id = engine.create("Offline only", "", "0")["id"] as String
+      // No Orbot is installed in CI. A failed connection still persists Tor
+      // mode and the onion node, never falling back to a public endpoint.
+      assertTrue(runCatching { engine.configureNode(onion, true) }.isFailure)
+      assertEquals(true, engine.privacy()["tor"])
+      assertEquals(onion, engine.snapshot()["daemon"])
+      assertEquals(false, engine.snapshot()["complete"])
+      assertTrue(runCatching { engine.connect("https://example.com") }.isFailure)
+      engine.suspend()
+      assertTrue(runCatching { engine.connect(onion) }.isFailure)
+      assertEquals(1, engine.list().size)
+      engine.resume(); engine.open(id)
+      assertEquals("0", engine.snapshot()["available"])
+    } finally { engine.erase() }
+  }
   @Test fun nativeLockMatchesExistingVerifierAndIsFast() {
     val start = System.nanoTime()
     val hash = deriveLockSecret("2468", "000102030405060708090a0b0c0d0e0f", 60000)

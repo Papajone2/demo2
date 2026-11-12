@@ -6,7 +6,8 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import com.sun.jna.Pointer
 import java.io.File
-import java.net.URI
+import java.net.Socket
+import java.net.InetSocketAddress
 import java.security.KeyStore
 import java.security.SecureRandom
 import java.util.UUID
@@ -34,6 +35,9 @@ internal class WalletEngine(private val context: Context) {
   private var quote: Map<String, Any>? = null
   private var connected = false
   private var network = 2
+  @Volatile private var foreground = true
+  @Volatile private var backgroundCloseFailed = false
+  private fun torEnabled() = prefs.getBoolean("tor", false)
   private fun defaultDaemon() = if (network == 0) "https://xmr.nodely.dev:18089" else "https://xmr.nodely.dev:38089"
   private fun networkLabel() = if (network == 0) "mainnet" else "stagenet"
 
@@ -125,6 +129,7 @@ internal class WalletEngine(private val context: Context) {
     }
   }
   @Synchronized fun open(id: String): Map<String, Any> {
+    if (backgroundCloseFailed) close() // Retry persistence before allowing resume.
     if (selected == id && wallet != null) return snapshot()
     close()
     require(list().any { it["id"] == id }) { "Account not found." }
@@ -136,18 +141,48 @@ internal class WalletEngine(private val context: Context) {
     return snapshot()
   }
   @Synchronized fun connect(url: String) {
-    val uri = URI(url)
-    require(uri.scheme == "https" && uri.host != null && uri.userInfo == null && uri.query == null && uri.fragment == null) {
-      "Use an HTTPS ${networkLabel()} daemon URL without credentials."
-    }
+    check(foreground) { "Sync pauses while the app is in the background." }
+    val tor = torEnabled()
+    val uri = validateNode(url, tor)
     val w = current()
     connected = false
-    check(api.MONERO_Wallet_init(w, url, 0, "", "", 1, 0, "") != 0.toByte()) { "Could not connect to ${networkLabel()} daemon." }
+    if (tor) {
+      // Orbot must be running locally. Check SOCKS5, not just an open TCP port.
+      Socket().use { socket ->
+        socket.connect(InetSocketAddress("127.0.0.1", 9050), 4000)
+        socket.soTimeout = 4000
+        socket.getOutputStream().write(byteArrayOf(5, 1, 0))
+        check(socket.getInputStream().read() == 5 && socket.getInputStream().read() == 0) {
+          "Start Orbot SOCKS on port 9050. No direct connection was attempted."
+        }
+      }
+    }
+    check(api.MONERO_Wallet_init(w, url, 0, "", "", if (uri.scheme == "https") 1 else 0, 0,
+      if (tor) "127.0.0.1:9050" else "") != 0.toByte()) { "Could not connect to node. Check your connection and node settings." }
+    check(foreground) { "Sync pauses while the app is in the background." }
     api.MONERO_Wallet_setTrustedDaemon(w, 0)
     api.MONERO_Wallet_startRefresh(w)
     api.MONERO_Wallet_refreshAsync(w)
     connected = true
     check(prefs.edit().putString("daemon-$network", url).commit())
+  }
+  @Synchronized fun privacy(): Map<String, Any> = mapOf("tor" to torEnabled())
+  fun suspend() {
+    foreground = false
+    // Never block Android's UI/lifecycle thread behind a daemon request.
+    Thread { synchronized(this) {
+      if (!foreground) runCatching { close() }.onFailure { backgroundCloseFailed = true }
+    } }.start()
+  }
+  fun resume() { foreground = true }
+  @Synchronized fun configureNode(url: String, tor: Boolean) {
+    validateNode(url, tor)
+    val id = selected ?: error("Open a wallet first.")
+    // Stop the old connection before changing privacy mode; never fall back.
+    close()
+    check(prefs.edit().putBoolean("tor", tor).putString("daemon-$network", url).commit())
+    open(id)
+    connect(url)
   }
   @Synchronized fun snapshot(): Map<String, Any> {
     val w = current()
@@ -163,6 +198,11 @@ internal class WalletEngine(private val context: Context) {
         "confirmations" to api.MONERO_TransactionInfo_confirmations(tx).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
         "createdAt" to api.MONERO_TransactionInfo_timestamp(tx).toDouble() * 1000,
         "address" to "", "note" to "")
+    }.sortedByDescending { (it["createdAt"] as Double) }
+    val uncertain = prefs.getString("broadcast-$selected", "")
+    if (!uncertain.isNullOrBlank() && txs.any { it["id"] == uncertain && (it["confirmations"] as Int) > 0 }) {
+      // Only chain inclusion proves a previously uncertain broadcast happened.
+      check(prefs.edit().remove("broadcast-$selected").commit())
     }
     val count = api.MONERO_Wallet_numSubaddresses(w, 0).coerceAtMost(10000).toInt()
     val addresses = (0 until count).map { text(api.MONERO_Wallet_address(w, 0, it.toLong())) }
@@ -173,6 +213,7 @@ internal class WalletEngine(private val context: Context) {
       "target" to if (connected) api.MONERO_Wallet_daemonBlockChainHeight(w).toDouble() else 0.0,
       "complete" to (connected && api.MONERO_Wallet_synchronized(w) != 0.toByte()),
       "network" to networkLabel(),
+      "tor" to torEnabled(),
       "daemon" to (prefs.getString("daemon-$network",
         if (network == 2) prefs.getString("daemon", defaultDaemon()) else defaultDaemon())!!),
       "broadcastWarning" to (prefs.getString("broadcast-$selected", "")!!))
@@ -216,15 +257,19 @@ internal class WalletEngine(private val context: Context) {
   @Synchronized fun prepare(address: String, atomic: String): Map<String, Any> {
     check(pending == null) { "Discard the previous review before preparing another payment." }
     check(!prefs.contains("broadcast-$selected")) { "An earlier broadcast has an uncertain outcome. Check its transaction hash before sending again." }
-    check(connected && api.MONERO_Wallet_synchronized(current()) != 0.toByte()) { "Finish ${networkLabel()} scanning before sending." }
-    require(api.MONERO_Wallet_addressValid(address, network) != 0.toByte()) { "Invalid ${networkLabel()} address." }
+    check(connected && api.MONERO_Wallet_synchronized(current()) != 0.toByte()) { "Funds are still syncing. Wait until fully synced before sending." }
+    require(api.MONERO_Wallet_addressValid(address, network) != 0.toByte()) { "Invalid address or wrong network. Check the recipient address." }
     val sweep = atomic == "MAX"
     val amount = if (sweep) 0L else atomic.toLongOrNull()
     require(amount != null && (sweep || amount > 0)) { "Invalid atomic amount." }
+    val spendable = java.lang.Long.toUnsignedString(api.MONERO_Wallet_unlockedBalance(current(), 0)).toBigInteger()
+    require(spendable.signum() > 0 && (sweep || amount.toBigInteger() <= spendable)) {
+      "Not enough spendable balance. Allow for the fee, or choose Max."
+    }
     val tx = api.MONERO_Wallet_createTransaction(current(), address, "", amount, 0, 0, 0, "", ";")
       ?: error("Could not prepare transaction.")
     pending = tx
-    check(api.MONERO_PendingTransaction_status(tx) == 0) { "Transaction preparation failed. Check unlocked balance and daemon." }
+    check(api.MONERO_PendingTransaction_status(tx) == 0) { "Could not prepare payment. Check spendable balance including the fee, then check your node connection." }
     check(api.MONERO_PendingTransaction_txCount(tx) == 1L) { "Split transactions are not supported in this first native build." }
     val actualAmount = java.lang.Long.toUnsignedString(api.MONERO_PendingTransaction_amount(tx))
     check(if (sweep) actualAmount.toBigInteger() > java.math.BigInteger.ZERO else actualAmount == atomic) { "Engine amount differs from requested amount." }
@@ -256,7 +301,10 @@ internal class WalletEngine(private val context: Context) {
     // review and release wallet-owned state; never reuse its transaction token.
     val id = selected
     close()
-    if (id != null) open(id)
+    if (id != null) {
+      val reopened = open(id)
+      try { connect(reopened["daemon"] as String) } catch (_: Exception) { /* Stay offline, never change privacy mode. */ }
+    }
   }
   @Synchronized fun close() {
     quote = null; pending = null; connected = false
@@ -265,6 +313,7 @@ internal class WalletEngine(private val context: Context) {
       check(api.MONERO_WalletManager_closeWallet(manager, it, 1) != 0.toByte()) { "Could not safely close wallet." }
     }
     wallet = null; selected = null
+    backgroundCloseFailed = false
   }
   @Synchronized fun erase() {
     close()

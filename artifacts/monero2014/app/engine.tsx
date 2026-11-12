@@ -8,7 +8,7 @@ import { Btn, Card, F, s as ui, useInsets } from '@/components/ui';
 import { msg, useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
 import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
-import { NativeEngineScreen } from '@/components/native-engine-screen';
+import { NodeSettings } from '@/components/node-settings';
 
 const POINTS: { icon: keyof typeof Feather.glyphMap; title: string; body: string }[] = [
   { icon: 'cpu', title: msg('Native engine required'), body: msg('Real Monero wallets need the native wallet2 library to derive keys, scan outputs and sign transactions. Expo Go cannot load it, so this build has no real wallet engine.') },
@@ -18,7 +18,7 @@ const POINTS: { icon: keyof typeof Feather.glyphMap; title: string; body: string
 ];
 
 export default function EngineScreen() {
-  if (IS_NATIVE_ANDROID) return <NativeEngineScreen />;
+  if (IS_NATIVE_ANDROID) return <NodeSettings />;
   return <PreviewEngineScreen />;
 }
 function PreviewEngineScreen() {

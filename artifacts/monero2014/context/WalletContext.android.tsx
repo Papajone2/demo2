@@ -5,6 +5,9 @@ import { useLock } from '@/context/LockContext';
 import { isAvatarId, validatedWalletName, type WalletState, type AvatarId } from '@/lib/wallet-model';
 import type { Ctx } from './WalletContext';
 import { useMarketHistory } from '@/hooks/useMarketData';
+import { AppState } from 'react-native';
+import { useLanguage } from '@/context/LanguageContext';
+import { loadNetworkPolicy } from '@/lib/network-policy';
 export { WALLET_STORAGE_KEY, REQUIRED_CONFIRMATIONS, balances } from '@/lib/wallet-model';
 export type { Tx, TxKind, WalletState } from '@/lib/wallet-model';
 
@@ -18,32 +21,55 @@ const accountState = (a: NativeAccount, snapshot: NativeSnapshot | null, prefs: 
   txs: snapshot?.id === a.id ? snapshot.txs : [],
   currency: prefs[a.id]?.currency ?? 'USD', hideBalance: prefs[a.id]?.hideBalance ?? false,
   rateCents: null, needsCustomization: a.needsCustomization, network: a.network,
+  broadcastWarning: snapshot?.id === a.id ? snapshot.broadcastWarning : '',
 });
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const { authorize } = useLock();
+  const { language } = useLanguage();
   const [accounts, setAccounts] = useState<NativeAccount[]>([]);
   const [snapshot, setSnapshot] = useState<NativeSnapshot | null>(null);
   const [prefs, setPrefs] = useState<Prefs>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
+  const active = useRef(AppState.currentState === 'active');
+  const scanSample = useRef({ id: '', height: 0, time: 0 });
+  const [remainingSeconds, setRemaining] = useState(0);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const run = useCallback(<T,>(work: () => Promise<T>): Promise<T> => {
     const task = queue.current.then(work);
     queue.current = task.catch(() => undefined);
     return task;
   }, []);
-  const publish = useCallback((s: NativeSnapshot) => { if (mounted.current) setSnapshot(s); }, []);
+  const publish = useCallback((s: NativeSnapshot) => {
+    if (!mounted.current) return;
+    const now = Date.now(), before = scanSample.current;
+    if (before.id !== s.id || s.height < before.height) {
+      scanSample.current = { id: s.id, height: s.height, time: now }; setRemaining(0);
+    } else if (now - before.time >= 10000 && s.height > before.height) {
+      const speed = (s.height - before.height) / ((now - before.time) / 1000);
+      setRemaining(Math.max(0, Math.ceil((s.target - s.height) / speed)));
+      scanSample.current = { id: s.id, height: s.height, time: now };
+    } else if (now - before.time > 30000) setRemaining(0);
+    setSnapshot(s);
+  }, []);
   const load = useCallback(() => {
     setLoading(true); setError(null);
     void run(async () => {
       const engine = nativeEngine();
+      await loadNetworkPolicy();
       const list = await engine.list();
       if (!mounted.current) return;
       setAccounts(list);
       const raw = await AsyncStorage.getItem(PREFS);
       if (raw) setPrefs(JSON.parse(raw));
+      // A language suggests an initial currency; an explicit preference wins.
+      if (language === 'hi') {
+        const existing: Prefs = raw ? JSON.parse(raw) : {};
+        for (const a of list) if (!existing[a.id]?.currency) existing[a.id] = { ...existing[a.id], currency: 'INR' };
+        await AsyncStorage.setItem(PREFS, JSON.stringify(existing)); setPrefs(existing);
+      }
       if (list.length) {
         const s = await engine.open(list[0].id);
         publish(s);
@@ -56,7 +82,15 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       } else setSnapshot(null);
     }).catch(e => mounted.current && setError(e instanceof Error ? e.message : 'Native engine failed.'))
       .finally(() => mounted.current && setLoading(false));
-  }, [run, publish]);
+  }, [run, publish, language]);
+  useEffect(() => {
+    const listener = AppState.addEventListener('change', next => {
+      active.current = next === 'active';
+      if (active.current) load();
+      else void run(() => nativeEngine().close()).catch(() => undefined);
+    });
+    return () => listener.remove();
+  }, [load, run]);
   useEffect(() => {
     mounted.current = true; load();
     return () => { mounted.current = false; void nativeEngine().close().catch(() => undefined); };
@@ -64,6 +98,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!snapshot?.id) return;
     const timer = setInterval(() => {
+      if (!active.current) return;
       void run(async () => publish(await nativeEngine().snapshot())).catch(e => {
         if (mounted.current) setError(e instanceof Error ? e.message : 'Scanning failed.');
       });
@@ -71,7 +106,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(timer);
   }, [snapshot?.id, run, publish]);
   const currency = prefs[snapshot?.id ?? '']?.currency ?? 'USD';
-  const supportedCurrency = ({ USD: 'usd', EUR: 'eur', GBP: 'gbp' } as const)[currency as 'USD' | 'EUR' | 'GBP'];
+  const supportedCurrency = ({ USD: 'usd', EUR: 'eur', GBP: 'gbp', INR: 'inr', CHF: 'chf' } as const)[currency as 'USD' | 'EUR' | 'GBP' | 'INR' | 'CHF'];
   const market = useMarketHistory({ currency: supportedCurrency ?? 'usd', range: '1d' }, {
     query: { enabled: Boolean(snapshot && supportedCurrency), staleTime: 60000, refetchInterval: 60000, retry: 1 },
   });
@@ -89,7 +124,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     locked: BigInt(snapshot?.total ?? '0') - BigInt(snapshot?.available ?? '0'),
     sync: {
       progress: snapshot?.target ? Math.min(1, snapshot.height / snapshot.target) : 0,
-      complete: snapshot?.complete ?? false, remainingSeconds: 0,
+      complete: snapshot?.complete ?? false, remainingSeconds, height: snapshot?.height, target: snapshot?.target,
     },
     selectWallet: async (id, secret, signal) => {
       const auth = await authorize(secret);

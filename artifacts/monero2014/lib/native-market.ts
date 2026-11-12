@@ -22,13 +22,16 @@ export function observedHistory(rows: unknown, currency: MoneroHistory['currency
     source, stale: now - last.timestamp > 15 * 60000 };
 }
 async function json(url: string) {
+  // Dynamic import keeps the pure history parser usable in Node regression tests.
+  const { guardMarketRequest } = await import('./network-policy');
   const controller = new AbortController();
+  const release = guardMarketRequest(controller);
   const timer = setTimeout(() => controller.abort(), 12000);
   try {
     const r = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
     if (!r.ok) throw new Error(`Market provider HTTP ${r.status}`);
     return await r.json();
-  } finally { clearTimeout(timer); }
+  } finally { clearTimeout(timer); release(); }
 }
 export async function nativeMarketHistory(params: GetMoneroHistoryParams): Promise<MoneroHistory> {
   const currency = params.currency ?? 'usd', range = params.range ?? '1d';

@@ -18,7 +18,7 @@ paths:
       parameters:
         - in: query
           name: currency
-          schema: { type: string, enum: [usd, eur, gbp], default: usd }
+          schema: { type: string, enum: [usd, eur, gbp, inr, chf], default: usd }
       responses:
         "200":
           description: Observed market statistics; unavailable fields remain null
@@ -34,7 +34,7 @@ paths:
       parameters:
         - in: query
           name: currency
-          schema: { type: string, enum: [usd, eur, gbp], default: usd }
+          schema: { type: string, enum: [usd, eur, gbp, inr, chf], default: usd }
         - in: query
           name: range
           schema: { type: string, enum: [1h, 1d, 1w, 1m, 1y], default: 1d }
@@ -53,7 +53,7 @@ paths:
       parameters:
         - in: query
           name: currency
-          schema: { type: string, enum: [usd, eur, gbp], default: usd }
+          schema: { type: string, enum: [usd, eur, gbp, inr, chf], default: usd }
       responses:
         "200":
           description: Timestamped market reference, never a fabricated fallback
@@ -136,7 +136,7 @@ components:
       type: object
       required: [currency, points, price, changeAbsolute, changePercent, updatedAt, source, stale]
       properties:
-        currency: { type: string, enum: [usd, eur, gbp] }
+        currency: { type: string, enum: [usd, eur, gbp, inr, chf] }
         points:
           type: array
           minItems: 2

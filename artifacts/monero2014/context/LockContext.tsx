@@ -1,7 +1,8 @@
 import AsyncStorage, { enableTemporaryTestStorage } from '@/lib/app-storage';
 import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState, Platform, View } from 'react-native';
+import { AUTO_LOCK_MS, lockoutMs } from '@/lib/security-policy';
 import { checkSecret, createVerifier, isVerifier, LockMethod, Verifier } from '@/lib/kdf';
 import { WALLET_STORAGE_KEY } from '@/lib/wallet-model';
 import { useLanguage } from '@/context/LanguageContext';
@@ -10,6 +11,8 @@ import { IS_NATIVE_ANDROID, nativeEngine } from '@/lib/native-engine';
 const VERIFIER_KEY = 'm2014_lock_verifier';
 const THROTTLE_KEY = 'm2014_lock_throttle';
 const SETUP_KEY = 'm2014_setup_seen';
+const AUTO_LOCK_KEY = 'm2014_auto_lock';
+const DESTRUCTION_KEY = 'm2014_destruction_verifier';
 
 export const IS_WEB_DEMO = Platform.OS === 'web';
 
@@ -29,12 +32,6 @@ export type LockStatus =
   | 'changeSet';
 
 type Throttle = { failures: number; until: number };
-const FREE_ATTEMPTS = 5;
-
-function lockoutMs(failures: number) {
-  if (failures < FREE_ATTEMPTS) return 0;
-  return Math.min(30000 * 2 ** (failures - FREE_ATTEMPTS), 15 * 60 * 1000);
-}
 
 type Ctx = {
   status: LockStatus;
@@ -51,6 +48,10 @@ type Ctx = {
   startChange: () => void;
   cancelChange: () => void;
   eraseEverything: () => Promise<void>;
+  autoLock: boolean;
+  setAutoLock: (enabled: boolean) => Promise<void>;
+  destructionEnabled: boolean;
+  setDestruction: (secret: string) => Promise<void>;
 };
 
 const LockContext = createContext<Ctx | null>(null);
@@ -64,6 +65,9 @@ export function LockProvider({ children }: { children: React.ReactNode }) {
   const busy = useRef(false);
   const statusRef = useRef(status);
   const activeRef = useRef(true);
+  const [autoLock, updateAutoLock] = useState(true);
+  const [destruction, setDestructionVerifier] = useState<Verifier | null>(null);
+  const lastActivity = useRef(Date.now());
   statusRef.current = status;
 
   const load = useCallback(async () => {
@@ -72,6 +76,13 @@ export function LockProvider({ children }: { children: React.ReactNode }) {
     try {
       const raw = await store.get(VERIFIER_KEY);
       const th = await store.get(THROTTLE_KEY);
+      updateAutoLock((await store.get(AUTO_LOCK_KEY)) !== 'off');
+      const wipeRaw = await store.get(DESTRUCTION_KEY);
+      if (wipeRaw) {
+        const wipe = JSON.parse(wipeRaw);
+        if (!isVerifier(wipe)) throw new Error('Stored lock data is unreadable.');
+        setDestructionVerifier(wipe);
+      }
       if (th) {
         const p = JSON.parse(th) as Throttle;
         if (typeof p.failures === 'number' && typeof p.until === 'number') setThrottle(p);
@@ -99,12 +110,19 @@ export function LockProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
       activeRef.current = s === 'active';
-      if (s === 'background' && (statusRef.current === 'unlocked' || statusRef.current === 'changeSet')) {
+      if (autoLock && Date.now() - lastActivity.current >= AUTO_LOCK_MS && statusRef.current === 'unlocked') {
         setStatus('locked');
       }
     });
     return () => sub.remove();
-  }, []);
+  }, [autoLock]);
+  useEffect(() => {
+    if (!autoLock) return;
+    const timer = setInterval(() => {
+      if (statusRef.current === 'unlocked' && Date.now() - lastActivity.current >= AUTO_LOCK_MS) setStatus('locked');
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [autoLock]);
 
   const setup = useCallback(async (method: LockMethod, secret: string) => {
     if (busy.current) return;
@@ -115,7 +133,11 @@ export function LockProvider({ children }: { children: React.ReactNode }) {
       await store.set(THROTTLE_KEY, JSON.stringify({ failures: 0, until: 0 }));
       await AsyncStorage.setItem(SETUP_KEY, '1');
       setVerifier(v);
+      // A changed unlock secret must not accidentally become a destruction secret.
+      await store.del(DESTRUCTION_KEY);
+      setDestructionVerifier(null);
       setThrottle({ failures: 0, until: 0 });
+      lastActivity.current = Date.now();
       setStatus(activeRef.current ? 'unlocked' : 'locked');
     } finally {
       busy.current = false;
@@ -140,11 +162,11 @@ export function LockProvider({ children }: { children: React.ReactNode }) {
         const next = { failures, until: Date.now() + lockoutMs(failures) };
         await store.set(THROTTLE_KEY, JSON.stringify(next));
         setThrottle(next);
-        const left = FREE_ATTEMPTS - failures;
+        const left = 5 - failures % 5;
         return {
           ok: false,
           message:
-            left > 0
+            failures % 5 !== 0
               ? t('Incorrect. {n} attempts before a timed lockout.', { n: left })
               : 'Incorrect. Input is paused before the next try.',
         };
@@ -158,10 +180,24 @@ export function LockProvider({ children }: { children: React.ReactNode }) {
   );
 
   const unlock = useCallback(async (secret: string) => {
+    if (!busy.current && statusRef.current === 'locked' && Date.now() >= throttle.until && destruction) {
+      busy.current = true;
+      try {
+        if (await checkSecret(destruction, secret)) {
+          // Opt-in only. No recovery words are destroyed on-chain; this removes
+          // local files and the local wrapped passwords.
+          if (IS_NATIVE_ANDROID) await nativeEngine().erase();
+          await store.del(VERIFIER_KEY); await store.del(DESTRUCTION_KEY); await store.del(THROTTLE_KEY);
+          await AsyncStorage.multiRemove([WALLET_STORAGE_KEY, SETUP_KEY]);
+          setVerifier(null); setDestructionVerifier(null); setThrottle({ failures: 0, until: 0 }); setStatus('needsSetup');
+          return { ok: false, message: 'Wallet data removed from this device.' };
+        }
+      } finally { busy.current = false; }
+    }
     const result = await verify(secret);
-    if (result.ok) setStatus(s => !activeRef.current ? 'locked' : s === 'changeVerify' ? 'changeSet' : 'unlocked');
+    if (result.ok) { lastActivity.current = Date.now(); setStatus(s => !activeRef.current ? 'locked' : s === 'changeVerify' ? 'changeSet' : 'unlocked'); }
     return result;
-  }, [verify]);
+  }, [verify, destruction, throttle]);
 
   const authorize = useCallback(async (secret: string) => {
     if (statusRef.current !== 'unlocked' || !activeRef.current) return { ok: false, message: 'Unlock the app first.' };
@@ -178,11 +214,26 @@ export function LockProvider({ children }: { children: React.ReactNode }) {
     if (IS_NATIVE_ANDROID) await nativeEngine().erase();
     await store.del(VERIFIER_KEY);
     await store.del(THROTTLE_KEY);
+    await store.del(DESTRUCTION_KEY);
     await AsyncStorage.multiRemove([WALLET_STORAGE_KEY, SETUP_KEY]);
     setVerifier(null);
+    setDestructionVerifier(null);
     setThrottle({ failures: 0, until: 0 });
     setStatus('needsSetup');
   }, []);
+  const setAutoLock = useCallback(async (enabled: boolean) => {
+    await store.set(AUTO_LOCK_KEY, enabled ? 'on' : 'off');
+    lastActivity.current = Date.now(); updateAutoLock(enabled);
+  }, []);
+  const setDestruction = useCallback(async (secret: string) => {
+    if (statusRef.current !== 'unlocked' || !verifier) throw new Error('Unlock the app first.');
+    if (!secret) { await store.del(DESTRUCTION_KEY); setDestructionVerifier(null); return; }
+    if (await checkSecret(verifier, secret)) throw new Error('Choose a different secret from your unlock secret.');
+    if (verifier.method === 'pin' && !new RegExp(`^\\d{${verifier.pinLength ?? 6}}$`).test(secret)) throw new Error('Use the same PIN length as your unlock PIN.');
+    if (verifier.method === 'password' && secret.length < 8) throw new Error('Use at least 8 characters.');
+    const next = await createVerifier(verifier.method, secret, verifier.pinLength ?? 6);
+    await store.set(DESTRUCTION_KEY, JSON.stringify(next)); setDestructionVerifier(next);
+  }, [verifier]);
 
   const value = useMemo(
     () => ({
@@ -208,10 +259,11 @@ export function LockProvider({ children }: { children: React.ReactNode }) {
       startChange,
       cancelChange,
       eraseEverything,
+      autoLock, setAutoLock, destructionEnabled: !!destruction, setDestruction,
     }),
-    [status, verifier, error, throttle, load, setup, unlock, authorize, lock, startChange, cancelChange, eraseEverything],
+    [status, verifier, error, throttle, load, setup, unlock, authorize, lock, startChange, cancelChange, eraseEverything, autoLock, setAutoLock, destruction, setDestruction],
   );
-  return <LockContext.Provider value={value}>{children}</LockContext.Provider>;
+  return <LockContext.Provider value={value}><View style={{ flex: 1 }} onTouchStart={() => { if (activeRef.current) lastActivity.current = Date.now(); }} onPointerDown={() => { if (activeRef.current) lastActivity.current = Date.now(); }}>{children}</View></LockContext.Provider>;
 }
 
 export function useLock() {

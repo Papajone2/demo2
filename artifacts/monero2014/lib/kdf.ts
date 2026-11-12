@@ -30,14 +30,14 @@ async function derive(secret: string, salt: Uint8Array, iterations: number) {
   return bytesToHex(out);
 }
 
-export async function createVerifier(method: LockMethod, secret: string): Promise<Verifier> {
-  if (method === 'pin' && !/^\d{4}$/.test(secret)) throw new Error('Enter a 4-digit PIN.');
+export async function createVerifier(method: LockMethod, secret: string, pinLength: 4 | 6 = 4): Promise<Verifier> {
+  if (method === 'pin' && !new RegExp(`^\\d{${pinLength}}$`).test(secret)) throw new Error('Use the same PIN length as your unlock PIN.');
   if (method === 'password' && secret.length < 8) throw new Error('Use at least 8 characters.');
   const salt = Platform.OS === 'web'
     ? globalThis.crypto.getRandomValues(new Uint8Array(16))
     : Crypto.getRandomBytes(16);
   const hash = await derive(secret, salt, ITERATIONS);
-  return { v: 1, method, salt: bytesToHex(salt), hash, iterations: ITERATIONS, kdf: 'pbkdf2-sha256', ...(method === 'pin' ? { pinLength: 4 as const } : {}) };
+  return { v: 1, method, salt: bytesToHex(salt), hash, iterations: ITERATIONS, kdf: 'pbkdf2-sha256', ...(method === 'pin' ? { pinLength } : {}) };
 }
 
 function constantTimeEqual(a: string, b: string) {

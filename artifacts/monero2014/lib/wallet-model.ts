@@ -27,7 +27,7 @@ export type Tx = {
 export type WalletState = {
   network?: 'mainnet' | 'stagenet';
   v: 1; id: string; name: string; iconId: AvatarId; receiveAddress: string;
-  addresses: string[]; currency: 'USD' | 'EUR' | 'GBP' | 'CHF';
+  addresses: string[]; currency: 'USD' | 'EUR' | 'GBP' | 'CHF' | 'INR'; broadcastWarning?: string;
   rateCents: string | null; hideBalance: boolean; txs: Tx[];
   needsCustomization: boolean;
 };
@@ -68,7 +68,7 @@ function isWallet(value: unknown): value is WalletState {
     isAvatarId(w.iconId) && typeof w.receiveAddress === 'string' &&
     Array.isArray(w.addresses) && w.addresses.length > 0 &&
     w.addresses.every(a => typeof a === 'string') && w.addresses.includes(w.receiveAddress) &&
-    ['USD', 'EUR', 'GBP', 'CHF'].includes(w.currency) &&
+    ['USD', 'EUR', 'GBP', 'CHF', 'INR'].includes(w.currency) &&
     (w.rateCents === null || (typeof w.rateCents === 'string' && /^\d{1,32}$/.test(w.rateCents))) &&
     typeof w.hideBalance === 'boolean' && typeof w.needsCustomization === 'boolean' &&
     Array.isArray(w.txs) && w.txs.every(isTx);

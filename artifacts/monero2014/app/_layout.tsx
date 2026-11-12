@@ -51,7 +51,7 @@ function RootLayoutNav() {
       <Stack.Screen name="receive" options={{ title: t('Receive'), presentation: 'modal' }} />
       <Stack.Screen name="test" options={{ title: t('Testing hub') }} />
       <Stack.Screen name="tx/[id]" options={{ title: t('Transaction') }} />
-      <Stack.Screen name="engine" options={{ title: t('Real wallets') }} />
+      <Stack.Screen name="engine" options={{ title: t('Nodes & Tor') }} />
     </Stack>
   );
 }

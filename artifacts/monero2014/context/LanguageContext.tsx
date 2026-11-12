@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import AppStorage from '@/lib/app-storage';
 import { isLanguageCode, LANGUAGE_STORAGE_KEY, type LanguageCode, resolveDeviceLanguage, SUPPORTED_LANGUAGES } from '@/lib/languages';
 import { CATALOGS } from '@/locales';
+import { errorKey } from '@/lib/wallet-errors';
 
 type Values = Record<string, string | number>;
 /** Marks a string literal as translatable source copy (translated later with t()). */
@@ -23,7 +24,8 @@ type Ctx = {
 
 const translate = (lang: LanguageCode) => (source: string, values?: Values) => {
   const cat = CATALOGS[lang];
-  return interpolate((cat && cat[source]) || source, values);
+  const key = cat?.[source] ? source : errorKey(source);
+  return interpolate((cat && cat[key]) || key, values);
 };
 
 const LanguageContext = createContext<Ctx>({

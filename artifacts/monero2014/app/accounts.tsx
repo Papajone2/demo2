@@ -11,6 +11,7 @@ import { WalletAvatar } from '@/components/wallet-avatar';
 import { useWallet } from '@/context/WalletContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
 
 const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
@@ -92,7 +93,7 @@ export default function AccountsScreen() {
               <WalletAvatar id={w.iconId} size={42} />
               <View style={{ flex: 1 }}>
                 <Text numberOfLines={1} style={{ fontFamily: F.s, fontSize: 16.5, color: c.foreground }}>{w.name}</Text>
-                <Text style={{ fontFamily: F.r, fontSize: 12.5, color: c.mutedForeground, marginTop: 2 }}>{on ? `${t('Active')} · ` : ''}{t('Test addresses: {n}', { n: w.addresses.length })}</Text>
+                <Text style={{ fontFamily: F.r, fontSize: 12.5, color: c.mutedForeground, marginTop: 2 }}>{on ? t('Active') : t('Account Addresses')}</Text>
               </View>
               <Pressable testID={`account-qr-${w.id}`} accessibilityLabel={t('Receive to {name}', { name: w.name })} hitSlop={6} onPress={e => { e.stopPropagation(); void pick(w.id, '/receive'); }} style={st.ic}>
                 <MaterialCommunityIcons name="qrcode" size={22} color={c.foreground} />
@@ -115,10 +116,15 @@ export default function AccountsScreen() {
 
 /** Create from Accounts: intro slides -> create/restore setup -> name + icon. Same app lock; nothing saved until final Save. */
 function NewWalletFlow({ defaultName, onCancel, onDone }: { defaultName: string; onCancel: () => void; onDone: () => void }) {
+  const { reload } = useWallet();
   const [stage, setStage] = useState<'slides' | 'setup' | 'name'>('slides');
   const [slide, setSlide] = useState(0);
-  if (stage === 'slides') return <Onboarding start={slide} onExit={onCancel} onDone={() => setStage('setup')} />;
-  if (stage === 'setup') return <WalletSetup onBack={() => { setSlide(2); setStage('slides'); }} onReady={() => setStage('name')} />;
+  if (stage === 'slides') return <Onboarding showLanguage start={slide} onExit={onCancel} onDone={() => setStage('setup')} />;
+  if (stage === 'setup') return <WalletSetup onBack={() => { setSlide(2); setStage('slides'); }} onReady={() => {
+    // Native setup already created exactly one account. FirstRunCustomize names
+    // that account after reload; never enter a second creation flow.
+    if (IS_NATIVE_ANDROID) { onDone(); reload(); } else setStage('name');
+  }} />;
   return <CustomizeFlow mode="create" defaultName={defaultName} onCancel={() => setStage('setup')} onDone={onDone} />;
 }
 

@@ -32,7 +32,7 @@ export type Ctx = {
   loading: boolean; error: string | null; reload: () => void;
   available: bigint; locked: bigint; total: bigint;
   selectWallet: (id: string, secret: string, signal?: AbortSignal) => Promise<void>;
-  sync: { remainingSeconds: number; progress: number; complete: boolean };
+  sync: { remainingSeconds: number; progress: number; complete: boolean; height?: number; target?: number };
   createWallet: (name?: string, iconId?: AvatarId) => Promise<string>;
   updateWalletProfile: (id: string, profile: { name?: string; iconId?: AvatarId }) => Promise<void>;
   deleteWallet: (id: string, secret: string, signal?: AbortSignal) => Promise<void>;

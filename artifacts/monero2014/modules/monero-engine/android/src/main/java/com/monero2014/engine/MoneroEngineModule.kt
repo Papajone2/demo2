@@ -20,6 +20,8 @@ class MoneroEngineModule : Module() {
     }
     AsyncFunction("open") { id: String -> engine.open(id) }
     AsyncFunction("connect") { url: String -> engine.connect(url) }
+    AsyncFunction("privacy") { engine.privacy() }
+    AsyncFunction("configureNode") { url: String, tor: Boolean -> engine.configureNode(url, tor) }
     AsyncFunction("snapshot") { engine.snapshot() }
     AsyncFunction("subaddress") { engine.subaddress() }
     AsyncFunction("profile") { id: String, name: String, icon: String -> engine.profile(id, name, icon) }
@@ -30,7 +32,8 @@ class MoneroEngineModule : Module() {
     AsyncFunction("discard") { engine.discard() }
     AsyncFunction("close") { engine.close() }
     AsyncFunction("erase") { engine.erase() }
-    OnActivityEntersBackground { engine.close() }
+    OnActivityEntersBackground { engine.suspend() }
+    OnActivityEntersForeground { engine.resume() }
     OnDestroy { engine.close() }
   }
 }

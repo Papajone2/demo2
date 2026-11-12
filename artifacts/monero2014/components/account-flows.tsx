@@ -13,6 +13,7 @@ import { type AvatarId, MAX_WALLET_NAME_LENGTH, walletNameLength, type WalletSta
 import { useLanguage } from '@/context/LanguageContext';
 import { IS_NATIVE_ANDROID, nativeEngine } from '@/lib/native-engine';
 import { WalletSetup } from './wallet-setup';
+import * as Clipboard from 'expo-clipboard';
 
 function Body({ children }: { children: React.ReactNode }) {
   const c = useColors();
@@ -149,9 +150,14 @@ function SecretReveal({ kind, onBack, walletId }: { kind: 'recovery' | 'viewkey'
   }
   if (step === 'result') {
     if (IS_NATIVE_ANDROID) return <Screen title={title} onBack={() => { setRevealed(''); onBack(); }}>
-      <Text style={[st.h, { color: c.foreground }]}>{rec ? 'Your recovery phrase' : 'Your private view key'}</Text>
+      <Text style={[st.h, { color: c.foreground }]}>{rec ? t('Your recovery phrase') : t('Your private view key')}</Text>
       {rec ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>{revealed.split(/\s+/).map((word, i) => <View key={i} style={{ width: '47%', backgroundColor: c.charcoal, borderRadius: 12, padding: 12 }}><Text style={{ color: c.foreground, fontFamily: F.m }}>{i + 1}. {word}</Text></View>)}</View> : <Text style={{ color: c.foreground, fontFamily: F.m }}>{revealed}</Text>}
-      <Notice tone="danger" title="Keep this private" body="Write recovery words offline. Do not photograph, copy to a clipboard, or share them." />
+      <Notice tone="danger" title={t('Keep your recovery phrase secret')} body={t('Clipboard contents may be visible to other apps. Prefer an offline backup. Copied words are cleared after one minute if unchanged.')} />
+      {rec ? <Btn label={t('Copy')} icon="copy" variant="soft" onPress={async () => {
+        await Clipboard.setStringAsync(revealed);
+        const text = revealed;
+        setTimeout(() => { void Clipboard.getStringAsync().then(current => current === text ? Clipboard.setStringAsync('') : undefined).catch(() => undefined); }, 60000);
+      }} /> : null}
       <Btn testID="secret-done" label={t('Done')} onPress={() => { setRevealed(''); onBack(); }} />
     </Screen>;
     return (
@@ -280,7 +286,7 @@ export function EditAccount({ wallet, onBack, onDeleted }: { wallet: WalletState
   if (view === 'addresses') {
     return (
       <Screen title="Account Addresses" onBack={main}>
-        <Notice tone="info" icon="info" title={t('Test identifiers')} body={t('These are local test identifiers for the simulated ledger, not real Monero addresses. Never send real XMR to them.')} />
+        {!IS_NATIVE_ANDROID ? <Notice tone="info" icon="info" title={t('Test identifiers')} body={t('These are local test identifiers for the simulated ledger, not real Monero addresses. Never send real XMR to them.')} /> : null}
         <Group>
           {wallet.addresses.map((a, i) => (
             <View key={a} style={st.addr}>

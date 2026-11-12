@@ -34,6 +34,7 @@ export function TestBanner({ compact }: { compact?: boolean }) {
   const c = useColors();
   const { state } = useWallet();
   const { t } = useLanguage();
+  if (IS_NATIVE_ANDROID && state?.network === 'mainnet') return null;
   return (
     <Pressable
       testID="test-banner"
@@ -41,8 +42,8 @@ export function TestBanner({ compact }: { compact?: boolean }) {
       style={({ pressed }) => [s.banner, { backgroundColor: c.warnBg, opacity: pressed ? 0.8 : 1 }, compact && { paddingVertical: 6 }]}
     >
       <View style={[s.bannerDot, { backgroundColor: c.warn }]} />
-      <Text style={[s.bannerText, { color: c.warn }]}>{IS_NATIVE_ANDROID && state?.network === 'mainnet' ? 'Mainnet · experimental wallet' : t('Test wallet • No real XMR')}</Text>
-      {!compact && <Text style={[s.bannerSub, { color: c.warn }]}>{IS_NATIVE_ANDROID ? state?.network === 'mainnet' ? 'REAL XMR' : 'STAGENET' : t('Sandbox')}</Text>}
+      <Text style={[s.bannerText, { color: c.warn }]}>{t('Test wallet • No real XMR')}</Text>
+      {!compact && !IS_NATIVE_ANDROID && <Text style={[s.bannerSub, { color: c.warn }]}>{t('Sandbox')}</Text>}
     </Pressable>
   );
 }

@@ -19,7 +19,7 @@ const RANGES = [
   { k: '1y', label: '1Y', desc: msg('past year') },
 ] as const;
 type RangeKey = typeof RANGES[number]['k'];
-const MARKET: Record<string, GetMoneroHistoryCurrency> = { USD: 'usd', EUR: 'eur', GBP: 'gbp' };
+const MARKET: Record<string, GetMoneroHistoryCurrency> = { USD: 'usd', EUR: 'eur', GBP: 'gbp', INR: 'inr', CHF: 'chf' };
 const RED = '#ff3355';
 const GREEN = '#06e151';
 
