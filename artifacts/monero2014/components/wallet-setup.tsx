@@ -7,6 +7,8 @@ import { accent } from '@/components/language-picker';
 import { Check, DEMO_TOKENS, Group, PillBtn, Row, sampleTokens, SampleTag, SetupPage, st, SURFACE, SURFACE_HI } from '@/components/setup-parts';
 import { msg, useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
+import { NativeWalletSetup } from './native-wallet-setup';
 
 type Step = 'choice' | 'warn' | 'phrase' | 'restore';
 export type SetupPath = 'create' | 'restore';
@@ -15,7 +17,11 @@ export type SetupPath = 'create' | 'restore';
  * Front-end-only wallet setup preview. Nothing here is stored, logged or sent;
  * all state lives in this component and is dropped on unmount or path switch.
  */
-export function WalletSetup({ onBack, onReady }: { onBack: () => void; onReady: (p: SetupPath) => void }) {
+export function WalletSetup(props: { onBack: () => void; onReady: (p: SetupPath) => void }) {
+  if (IS_NATIVE_ANDROID) return <NativeWalletSetup {...props} />;
+  return <PreviewWalletSetup {...props} />;
+}
+function PreviewWalletSetup({ onBack, onReady }: { onBack: () => void; onReady: (p: SetupPath) => void }) {
   const [step, setStep] = useState<Step>('choice');
   const [nonce, setNonce] = useState(0); // remounts steps so ephemeral state is discarded
   const go = (s: Step) => { if (s === 'choice') setNonce((n) => n + 1); setStep(s); };

@@ -1,3 +1,5 @@
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
+import { NativeSend } from '@/components/native-send';
 import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { router, Stack } from 'expo-router';
@@ -154,6 +156,7 @@ function Line({ k, v, sub, mono, strong, testID }: { k: string; v: string; sub?:
 }
 
 export default function SendScreen() {
+  if (IS_NATIVE_ANDROID) return <WalletGate><NativeSend /></WalletGate>;
   return (
     <WalletGate>
       <Send />

@@ -1,0 +1,4 @@
+{
+  "platforms": ["android"],
+  "android": { "modules": ["com.monero2014.engine.MoneroEngineModule"] }
+}

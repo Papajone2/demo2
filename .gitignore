@@ -56,3 +56,9 @@ Thumbs.db
 /artifacts/monero2014-web/public/monero.worker.js
 /artifacts/monero2014-web/public/monero.worker.js.LICENSE.txt
 .local/
+/artifacts/monero2014/android/
+/artifacts/monero2014/modules/monero-engine/android/src/main/jniLibs/
+/artifacts/monero2014/modules/monero-engine/android/build/
+/artifacts/monero2014/modules/monero-engine/android/.cxx/
+__pycache__/
+.local-pr-body.md

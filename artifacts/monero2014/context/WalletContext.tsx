@@ -27,7 +27,7 @@ function newWallet(name: string, iconId: AvatarId, demo = false): WalletState {
     ] : [],
   };
 }
-type Ctx = {
+export type Ctx = {
   state: WalletState | null; wallets: WalletState[]; selectedId: string | null; nextWalletNumber: number;
   loading: boolean; error: string | null; reload: () => void;
   available: bigint; locked: bigint; total: bigint;

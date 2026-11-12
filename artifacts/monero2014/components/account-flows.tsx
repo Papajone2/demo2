@@ -11,6 +11,8 @@ import { useWallet } from '@/context/WalletContext';
 import { useColors } from '@/hooks/useColors';
 import { type AvatarId, MAX_WALLET_NAME_LENGTH, walletNameLength, type WalletState } from '@/lib/wallet-model';
 import { useLanguage } from '@/context/LanguageContext';
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
+import { NativeWalletSetup } from './native-wallet-setup';
 
 function Body({ children }: { children: React.ReactNode }) {
   const c = useColors();
@@ -54,6 +56,13 @@ const nameOk = (n: string) => n.length > 0 && walletNameLength(n) <= MAX_WALLET_
 /* ---------------- Create / initial customization ---------------- */
 
 export function CustomizeFlow({ mode, wallet, defaultName, onDone, onCancel }: {
+  mode: 'create' | 'initial'; wallet?: WalletState | null; defaultName: string; onDone: () => void; onCancel?: () => void;
+}) {
+  const { reload } = useWallet();
+  if (IS_NATIVE_ANDROID && mode === 'create') return <NativeWalletSetup onBack={() => onCancel?.()} onReady={() => { reload(); onDone(); }} />;
+  return <CustomizeDetails mode={mode} wallet={wallet} defaultName={defaultName} onDone={onDone} onCancel={onCancel} />;
+}
+function CustomizeDetails({ mode, wallet, defaultName, onDone, onCancel }: {
   mode: 'create' | 'initial'; wallet?: WalletState | null; defaultName: string; onDone: () => void; onCancel?: () => void;
 }) {
   const c = useColors();

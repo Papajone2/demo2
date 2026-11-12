@@ -11,7 +11,7 @@
       "supportsTablet": false
     },
     "android": {
-      "package": "com.monero2014.wallet"
+      "package": "com.monero2014.wallet.stagenet"
     },
     "web": {
       "favicon": "./assets/images/icon.png",
@@ -20,7 +20,8 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-localization"
+      "expo-localization",
+      "./plugins/native-wallet"
     ],
     "experiments": {
       "typedRoutes": true,

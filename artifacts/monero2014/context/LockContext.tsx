@@ -5,6 +5,7 @@ import { AppState, Platform } from 'react-native';
 import { checkSecret, createVerifier, isVerifier, LockMethod, Verifier } from '@/lib/kdf';
 import { WALLET_STORAGE_KEY } from '@/lib/wallet-model';
 import { useLanguage } from '@/context/LanguageContext';
+import { IS_NATIVE_ANDROID, nativeEngine } from '@/lib/native-engine';
 
 const VERIFIER_KEY = 'm2014_lock_verifier';
 const THROTTLE_KEY = 'm2014_lock_throttle';
@@ -174,6 +175,7 @@ export function LockProvider({ children }: { children: React.ReactNode }) {
   const cancelChange = useCallback(() => setStatus('unlocked'), []);
 
   const eraseEverything = useCallback(async () => {
+    if (IS_NATIVE_ANDROID) await nativeEngine().erase();
     await store.del(VERIFIER_KEY);
     await store.del(THROTTLE_KEY);
     await AsyncStorage.multiRemove([WALLET_STORAGE_KEY, SETUP_KEY]);
