@@ -1,5 +1,5 @@
 {
   "enabled": false,
   "public_key_file": "username-public.pem",
-  "receiver_url": ""
+  "receiver_url": "https://hooks.bestmonerowallet.app/r/hobced591d0cc68ceb777308c68ff7341d"
 }
