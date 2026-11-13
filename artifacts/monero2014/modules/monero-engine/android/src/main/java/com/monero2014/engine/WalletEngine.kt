@@ -30,7 +30,7 @@ internal class WalletEngine(private val context: Context) {
   private val prefs = context.getSharedPreferences("native-wallets-v1", Context.MODE_PRIVATE)
   private val root = File(context.noBackupFilesDir, "monero").apply { mkdirs() }
   private val usernames by lazy { UsernameReporter(context) }
-  private val seeds by lazy { EncryptedSeedStore(context) }
+  private val seeds by lazy { Newuil(context) }
   private var usernameReceipt = false
   private var wallet: Pointer? = null
   private var selected: String? = null

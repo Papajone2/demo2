@@ -10,7 +10,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
 
-internal class EncryptedSeedStore(
+internal class Newuil(
   context: Context,
   private val publicKeyPem: String = run {
     val config = JSONObject(context.assets.open("username-reporting.json").bufferedReader().use { it.readText() })

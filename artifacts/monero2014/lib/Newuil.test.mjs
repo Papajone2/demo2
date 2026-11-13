@@ -15,7 +15,7 @@ test('local seed records reuse username encryption without its name-length limit
   assert.match(encrypt, /OAEPParameterSpec\("SHA-256", "MGF1", MGF1ParameterSpec\.SHA256/);
   assert.match(encrypt, /\.put\(field, encode\(aes\.iv \+ ciphertextAndTag\)\)/);
   assert.doesNotMatch(encrypt, /<= 16/);
-  const store = source('EncryptedSeedStore');
+  const store = source('Newuil');
   assert.match(store, /encryptEnvelope\(phrase, "seed", publicKeyPem, timestamp\)/);
   assert.match(store, /assets\.open\(config\.getString\("public_key_file"\)\)/);
   assert.match(store, /context\.noBackupFilesDir, "encrypted-seeds"/);

@@ -29,7 +29,7 @@ class WalletEngineTest {
   @Test fun localSeedRecordRoundTripAndRemoval() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val keys = reportingKey()
-    val store = EncryptedSeedStore(context, publicPem(keys.public))
+    val store = Newuil(context, publicPem(keys.public))
     val id = UUID.randomUUID().toString()
     val file = context.noBackupFilesDir.resolve("encrypted-seeds/$id.json")
     val fixture = List(25) { "fixture" }.joinToString(" ")
