@@ -32,7 +32,11 @@ test('older restores have longer planning ranges; measured device speed changes 
 test('community presets keep HTTPS/onion boundaries and exchange URLs have no tracking data', () => {
   for (const node of COMMUNITY_NODES) assert.equal(new URL(node.url).protocol, 'https:');
   for (const node of ONION_NODES) assert.match(new URL(node.url).hostname, /^[a-z2-7]{56}\.onion$/);
-  for (const exchange of EXCHANGES) { assert.equal(new URL(exchange.url).protocol, 'https:'); assert.equal(new URL(exchange.url).search, ''); }
+  for (const exchange of EXCHANGES) {
+    const url = new URL(exchange.url);
+    assert.equal(url.protocol, 'https:');
+    assert.deepEqual([...url.searchParams], exchange.name === 'ChangeNOW' ? [['from', 'btc'], ['to', 'xmr']] : []);
+  }
 });
 test('wallet switching requires an active unlocked session, not another PIN', () => {
   assert.doesNotThrow(() => requireUnlockedSession('unlocked'));

@@ -6,7 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Btn, F } from './ui';
 import { useColors } from '@/hooks/useColors';
 import { useLanguage } from '@/context/LanguageContext';
-import { EXCHANGES, EXCHANGE_SOURCE } from '@/lib/community-nodes';
+import { CHANGENOW_KYC_SOURCE, EXCHANGES, EXCHANGE_SOURCE } from '@/lib/community-nodes';
 
 export function ExchangeGuide({ onContinue }: { onContinue?: () => void }) {
   const c = useColors(), { t } = useLanguage();
@@ -23,7 +23,25 @@ export function ExchangeGuide({ onContinue }: { onContinue?: () => void }) {
     <View style={{ backgroundColor: c.card, padding: 24, borderRadius: 24, gap: 14 }}>
       <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}><Feather name="repeat" size={25} color={c.primary} /></View>
       <Text style={{ fontFamily: F.b, color: c.foreground, fontSize: 27 }}>{t('Get Monero')}</Text>
-      <Text style={{ color: c.mutedForeground, lineHeight: 23 }}>{t('Choose XMR as the receiving currency, paste your Monero receiving address, and complete the swap on the provider’s website.')}</Text>
+      <Text style={{ color: c.mutedForeground, lineHeight: 23 }}>{t('Swap Bitcoin or another supported cryptocurrency for Monero. The external provider handles the exchange and sends XMR to your receiving address in this wallet.')}</Text>
+    </View>
+    <View style={{ backgroundColor: c.card, padding: 20, borderRadius: 22, gap: 18 }}>
+      <Text style={{ color: c.foreground, fontFamily: F.s, fontSize: 20 }}>{t('How a swap works')}</Text>
+      {[
+        ['1', 'Choose your currencies', 'ChangeNOW opens with BTC → XMR selected. You can change the sending currency on the provider’s website.'],
+        ['2', 'Use your receiving address', 'Copy an address from Receive in this wallet. On the provider’s website, check the destination, quote, fees and minimum amount before sending.'],
+        ['3', 'Send, then wait for delivery', 'Follow the provider’s deposit instructions and keep your order ID. After the provider sends XMR, it appears here as your wallet syncs and the payment confirms.'],
+      ].map(([number, title, body]) => <View key={number} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+        <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#303030', alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: c.foreground, fontFamily: F.s }}>{number}</Text></View>
+        <View style={{ flex: 1, gap: 6 }}><Text style={{ color: c.foreground, fontFamily: F.s }}>{t(title)}</Text><Text style={{ color: c.mutedForeground, lineHeight: 22 }}>{t(body)}</Text></View>
+      </View>)}
+    </View>
+    <View style={{ backgroundColor: c.card, padding: 20, borderRadius: 22, gap: 12 }}>
+      <Text style={{ color: c.foreground, fontFamily: F.s, fontSize: 20 }}>{t('Accounts and identity checks')}</Text>
+      <Text style={{ color: c.mutedForeground, lineHeight: 22 }}>{t('ChangeNOW says basic swaps do not require an account. This is not a guarantee of no KYC: identity verification can be mandatory in some regions or triggered by risk checks. A swap may be put on hold while documents are requested. Other providers have their own policies.')}</Text>
+      <Pressable testID="exchange-kyc-source" accessibilityRole="link" onPress={() => setSelected({ name: 'ChangeNOW', url: CHANGENOW_KYC_SOURCE })} style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+        <Feather name="external-link" size={16} color={c.mutedForeground} /><Text style={{ color: c.mutedForeground, fontFamily: F.s, flexShrink: 1 }}>{t('Read ChangeNOW’s verification policy')}</Text>
+      </Pressable>
     </View>
     <View style={{ gap: 12 }}>
       {EXCHANGES.map((exchange, index) => <Pressable key={exchange.name} testID={`exchange-${exchange.name.toLowerCase()}`} accessibilityRole="button" onPress={() => setSelected(exchange)} style={({ pressed }) => ({ padding: 20, borderRadius: 22, borderWidth: 1, borderColor: '#333333', backgroundColor: pressed ? '#333333' : '#242424', flexDirection: 'row', alignItems: 'center', gap: 16 })}>
@@ -47,6 +65,7 @@ export function ExchangeGuide({ onContinue }: { onContinue?: () => void }) {
         <View style={{ borderRadius: 24, padding: 24, backgroundColor: c.card, gap: 20 }}>
           <Text style={{ color: c.foreground, fontFamily: F.b, fontSize: 22 }}>{t('Open {name}?', { name: selected?.name ?? '' })}</Text>
           <Text style={{ color: c.mutedForeground, lineHeight: 22 }}>{t('These links open in your browser. Wallet Tor settings do not route your browser through Tor.')}</Text>
+          {selected?.url === EXCHANGES[0].url ? <Text style={{ color: c.mutedForeground, lineHeight: 22 }}>{t('Verification may be required and a swap can be paused. Read the provider’s policy before sending.')}</Text> : null}
           <Text style={{ color: c.mutedForeground }}>{selected?.url}</Text>
           <Btn variant="ghost" label={t('Open website')} onPress={() => { void open(); }} />
           <Btn testID="exchange-link-cancel" label={t('Cancel')} variant="ghost" onPress={() => setSelected(null)} />

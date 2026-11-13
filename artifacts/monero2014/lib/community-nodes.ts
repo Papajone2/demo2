@@ -11,7 +11,8 @@ export const ONION_NODES = [
   { name: 'Rucknium', url: 'http://rucknium757bokwv3ss35ftgc3gzb7hgbvvglbg3hisp7tsj2fkd2nyd.onion:18081' },
 ] as const;
 export const EXCHANGE_SOURCE = 'https://www.getmonero.org/community/merchants/';
+export const CHANGENOW_KYC_SOURCE = 'https://changenow.io/terms-of-use/aml-kyc';
 export const EXCHANGES = [
-  { name: 'ChangeNOW', url: 'https://changenow.io/' },
+  { name: 'ChangeNOW', url: 'https://changenow.io/?from=btc&to=xmr' },
   { name: 'SimpleSwap', url: 'https://simpleswap.io/' },
 ] as const;
