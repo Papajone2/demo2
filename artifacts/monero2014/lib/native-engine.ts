@@ -21,6 +21,7 @@ type Engine = {
   snapshot(): Promise<NativeSnapshot>;
   subaddress(): Promise<NativeSnapshot>;
   profile(id: string, name: string, icon: string): Promise<void>;
+  reportUsername(): Promise<void>;
   secret(id: string, recovery: boolean): Promise<string>;
   remove(id: string): Promise<void>;
   prepare(address: string, atomic: string): Promise<NativeQuote>;

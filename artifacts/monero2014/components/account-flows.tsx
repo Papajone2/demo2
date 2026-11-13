@@ -13,6 +13,7 @@ import { type AvatarId, MAX_WALLET_NAME_LENGTH, walletNameLength, type WalletSta
 import { useLanguage } from '@/context/LanguageContext';
 import { IS_NATIVE_ANDROID, nativeEngine } from '@/lib/native-engine';
 import { WalletSetup } from './wallet-setup';
+import usernameReporting from '@/modules/monero-engine/android/src/main/assets/username-reporting.json';
 
 function Body({ children }: { children: React.ReactNode }) {
   const c = useColors();
@@ -112,6 +113,11 @@ function CustomizeDetails({ mode, wallet, defaultName, onDone, onCancel }: {
         </View>
         <TextInput testID="create-name" value={name} onChangeText={(v) => { setErr(null); setName((p) => limitName(v, p)); }} placeholder={defaultName} placeholderTextColor="#6E6E73" style={[st.input, { color: c.inkForeground }]} />
       </View>
+      <Text testID="username-reporting-notice" style={{ fontFamily: F.r, fontSize: 13, lineHeight: 19, color: '#B0B0B6', paddingHorizontal: 4 }}>
+        {usernameReporting.enabled
+          ? t('By continuing, you enable a one-time report after this wallet receives its first confirmed payment. Your encrypted wallet name is sent to the app operator, who can decrypt it. Your recovery phrase, address and payment amount are not sent.')
+          : t('Username reporting is not configured. No reports are sent.')}
+      </Text>
       <Pressable testID="create-icon-toggle" accessibilityRole="button" accessibilityState={{ expanded: showIcons }} onPress={() => { tap(); setShowIcons(v => !v); }} style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: 18, backgroundColor: pressed ? SURFACE_HI : SURFACE }]}>
         <Text style={{ fontFamily: F.s, fontSize: 15.5, color: c.inkForeground }}>{t('Choose an icon')}</Text>
         <Feather name={showIcons ? 'chevron-up' : 'chevron-down'} size={20} color="#8E8E93" />

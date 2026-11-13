@@ -29,6 +29,8 @@ internal class WalletEngine(private val context: Context) {
   private val manager get() = api.MONERO_WalletManagerFactory_getWalletManager()
   private val prefs = context.getSharedPreferences("native-wallets-v1", Context.MODE_PRIVATE)
   private val root = File(context.noBackupFilesDir, "monero").apply { mkdirs() }
+  private val usernames by lazy { UsernameReporter(context) }
+  private var usernameReceipt = false
   private var wallet: Pointer? = null
   private var selected: String? = null
   private var pending: Pointer? = null
@@ -220,6 +222,8 @@ internal class WalletEngine(private val context: Context) {
     }
     val count = api.MONERO_Wallet_numSubaddresses(w, 0).coerceAtMost(10000).toInt()
     val addresses = (0 until count).map { text(api.MONERO_Wallet_address(w, 0, it.toLong())) }
+    usernameReceipt = confirmedUsernameReceipt(network == 0,
+      connected && api.MONERO_Wallet_synchronized(w) != 0.toByte(), txs)
     return mapOf("id" to selected!!, "address" to addresses.first(), "addresses" to addresses, "txs" to txs,
       "total" to java.lang.Long.toUnsignedString(api.MONERO_Wallet_balance(w, 0)),
       "available" to java.lang.Long.toUnsignedString(api.MONERO_Wallet_unlockedBalance(w, 0)),
@@ -252,10 +256,17 @@ internal class WalletEngine(private val context: Context) {
   @Synchronized fun profile(id: String, name: String, icon: String) {
     require(name.isNotBlank() && name.codePointCount(0, name.length) <= 16) { "Use 1–16 characters." }
     val items = catalog()
+    var firstMainnetName = false
     for (i in 0 until items.length()) if (items.getJSONObject(i).getString("id") == id) {
+      firstMainnetName = items.getJSONObject(i).optBoolean("needsCustomization", false) &&
+        items.getJSONObject(i).optInt("network", 2) == 0
       items.getJSONObject(i).put("name", name).put("iconId", icon).put("needsCustomization", false)
     }
     writeCatalog(items)
+    if (firstMainnetName) runCatching { usernames.prepare(id, name) }
+  }
+  @Synchronized fun reportUsername() {
+    selected?.let { usernames.report(it, usernameReceipt, foreground, torEnabled()) }
   }
   @Synchronized fun remove(id: String) {
     if (selected == id) close()
@@ -266,6 +277,7 @@ internal class WalletEngine(private val context: Context) {
     root.listFiles()?.filter { it.name == id || it.name.startsWith("$id.") }?.forEach { check(it.delete()) }
     writeCatalog(remaining)
     check(prefs.edit().remove("pw-$id").remove("broadcast-$id").commit())
+    usernames.remove(id)
   }
   @Synchronized fun prepare(address: String, atomic: String): Map<String, Any> {
     check(pending == null) { "Discard the previous review before preparing another payment." }
@@ -320,6 +332,7 @@ internal class WalletEngine(private val context: Context) {
     }
   }
   @Synchronized fun close() {
+    usernameReceipt = false
     quote = null; pending = null; connected = false
     wallet?.let {
       api.MONERO_Wallet_pauseRefresh(it)

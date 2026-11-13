@@ -117,6 +117,55 @@ cd android
 
 ## Before any mainnet release
 
+### Username-only reporting (1.3.2)
+
+Two new app files: `UsernameReporter.kt` in the engine's Java package and
+`modules/monero-engine/android/src/main/assets/username-reporting.json`.
+Edit the JSON directly in GitHub: `public_key_pem` is an SPKI PEM RSA public key
+(2048–4096 bits); `receiver_url` is your public HTTPS relay endpoint ending in
+`/api/username-report`, without credentials/query parameters. Set `enabled`
+only after setup. Defaults are disabled/empty because no public key was supplied.
+Rebuild the APK after editing. No operator page or seed-key setting is added.
+
+The existing API server's single new `src/routes/username-report.ts` relay keeps
+`USERNAME_REPORT_WEBHOOK_URL` in server Secrets, not GitHub or the APK. Set
+`USERNAME_REPORT_LEDGER_DIR` to an absolute private persistent directory outside
+the web root. Use one worker with this file ledger; multiple workers need a
+shared transactional store. No live webhook is configured or called by tests.
+
+After a new mainnet wallet is named on the one disclosure screen, an encrypted
+report copy is saved privately in `noBackupFilesDir/username-reports/ID.json`.
+Original wallet catalog/name storage and seed protection are unchanged. Renames
+do not recreate it, and upgrades don't backfill reports for existing accounts.
+Deleting a wallet deletes its queued report. Restored wallets with historical
+receipts can qualify: this is an activated-wallet-installation count, not unique
+people or independently verified proof of funding.
+
+Exactly four JSON fields: `encrypted_aes_key`, `event` (`new_user`), `timestamp`
+(UTC record-creation time), `username`. Each report uses a fresh random 32-byte
+AES key, AES-256-GCM with no AAD, and a random 12-byte IV. `username` is padded
+Base64 of **IV (12 bytes) || ciphertext || GCM tag (16 bytes)**.
+`encrypted_aes_key` is padded Base64 RSA-OAEP/SHA-256 with MGF1/SHA-256 over the
+AES key. The server's private key never enters the app. Field names alone do not
+establish compatibility with an existing decoder; its AES/RSA/packing settings
+must match. The user's existing offline decoder has not been inspected/tested.
+No recovery phrase, address, amount or transaction ID is included.
+
+The first positive confirmed incoming mainnet transaction qualifies only after
+full scanning. Sending requires foreground/unlocked operation and pauses with
+Tor enabled (no direct fallback). After acknowledgement, the local wallet is
+marked reported; otherwise its same saved JSON retries with a one-minute
+per-process cooldown (restarts can retry sooner). A short-lived worker handles
+HTTP so analytics cannot block the native wallet queue. Requests already
+dispatched may finish when the app locks/backgrounds.
+Receiver-side deduplication is still needed after network ambiguity: the relay
+sends SHA-256 of canonical four-field JSON as the `Idempotency-Key` header,
+without adding a JSON field. Keep old private keys for existing encrypted files
+when rotating your public key. Timing, size and connection metadata remain
+observable. A fully offline decryptor needs records transferred from an online
+receiver. Review consent, retention, abuse controls and store declarations before
+enabling this in a public release.
+
 No audit or production readiness is claimed. Test funded **stagenet** receipt,
 unlocking, fee review, successful broadcast and confirmation, loss of network,
 backgrounding, interruption during writes, wrong PINs, full uninstall/restore,

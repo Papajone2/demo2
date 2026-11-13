@@ -104,7 +104,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (!snapshot?.id) return;
     const timer = setInterval(() => {
       if (!active.current) return;
-      void run(async () => publish(await nativeEngine().snapshot())).catch(e => {
+      void run(async () => {
+        publish(await nativeEngine().snapshot());
+        if (sessionStatus.current === 'unlocked' && active.current) await nativeEngine().reportUsername();
+      }).catch(e => {
         if (mounted.current) setError(e instanceof Error ? e.message : 'Scanning failed.');
       });
     }, 3000);

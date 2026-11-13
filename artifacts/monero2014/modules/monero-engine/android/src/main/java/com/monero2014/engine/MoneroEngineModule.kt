@@ -58,6 +58,7 @@ class MoneroEngineModule : Module() {
     AsyncFunction("snapshot") { engine.snapshot() }
     AsyncFunction("subaddress") { engine.subaddress() }
     AsyncFunction("profile") { id: String, name: String, icon: String -> engine.profile(id, name, icon) }
+    AsyncFunction("reportUsername") { engine.reportUsername() }
     AsyncFunction("secret") { id: String, recovery: Boolean -> engine.secret(id, recovery) }
     AsyncFunction("remove") { id: String -> engine.remove(id) }
     AsyncFunction("prepare") { address: String, amount: String -> engine.prepare(address, amount) }
