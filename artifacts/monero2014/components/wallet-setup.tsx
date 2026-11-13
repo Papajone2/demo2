@@ -38,7 +38,7 @@ function PreviewWalletSetup({ onBack, onReady }: { onBack: () => void; onReady: 
     working.current = true; setBusy(true); setError('');
     try {
       const created = await nativeEngine().create('', '', '0', network);
-      setNativeWords(created.seed.split(' ')); go('phrase');
+      setNativeWords(created.xqmp.split(' ')); go('phrase');
     } catch (e) { setError(errorMessage(e instanceof Error ? e.message : 'Wallet creation failed.')); }
     finally { working.current = false; setBusy(false); }
   };

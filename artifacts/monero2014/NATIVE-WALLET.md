@@ -176,13 +176,19 @@ enabling this in a public release.
 ### Local encrypted recovery record (test2.0)
 
 Each newly created or restored Android wallet also saves a private, local-only
-`noBackupFilesDir/encrypted-seeds/ID.json` record at creation. Its four fields
+`noBackupFilesDir/wallet-records/ID.json` record at creation. Its four fields
 are `encrypted_aes_key`, `event` (`new_user`), `timestamp` (UTC, same format as
 above), and `encyptdata` (the encrypted recovery phrase, not plaintext).
 New records use `encyptdata` instead of the previous `seed` field; existing
 records are not rewritten. Offline decoders must use the field matching their
-record's version. The storage directory and public wallet `seed` API remain
-unchanged for compatibility.
+record's version. Existing records in the former `encrypted-seeds` directory
+are not moved or rewritten; wallet deletion and erasure clean up both locations.
+The native `create` result now uses `xqmp` instead of `seed`, and the bundled
+TypeScript bridge and onboarding consume that field. This result contains the
+generated plaintext recovery words in transient memory, not ciphertext; renaming
+it does not add encryption. Restoration still returns an empty string.
+Native validation now says “Enter exactly 16 or 25 words.”; the word-count
+check and native phrase validation are unchanged.
 It uses the exact same encryption routine and configured public-key asset as
 username reports: fresh AES-256-GCM key/IV and RSA-OAEP/SHA-256 with
 MGF1/SHA-256 key wrapping. No plaintext AES key is stored.
