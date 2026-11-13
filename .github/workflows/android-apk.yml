@@ -42,6 +42,7 @@ jobs:
           pnpm exec tsc --build lib/api-client-react
           pnpm --filter @workspace/monero2014 run typecheck
           node --experimental-strip-types --test artifacts/monero2014/lib/*.test.mjs
+          node --experimental-strip-types --test artifacts/api-server/src/lib/wallet-activation.test.mjs
           python3 -m unittest discover -s scripts/tests -v
       - name: Fetch checksum-pinned native Monero engine
         run: python3 scripts/fetch-monero-engine.py

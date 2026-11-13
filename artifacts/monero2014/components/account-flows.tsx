@@ -13,6 +13,7 @@ import { type AvatarId, MAX_WALLET_NAME_LENGTH, walletNameLength, type WalletSta
 import { useLanguage } from '@/context/LanguageContext';
 import { IS_NATIVE_ANDROID, nativeEngine } from '@/lib/native-engine';
 import { WalletSetup } from './wallet-setup';
+import { ActivationDisclosure } from './activation-disclosure';
 
 function Body({ children }: { children: React.ReactNode }) {
   const c = useColors();
@@ -112,6 +113,7 @@ function CustomizeDetails({ mode, wallet, defaultName, onDone, onCancel }: {
         </View>
         <TextInput testID="create-name" value={name} onChangeText={(v) => { setErr(null); setName((p) => limitName(v, p)); }} placeholder={defaultName} placeholderTextColor="#6E6E73" style={[st.input, { color: c.inkForeground }]} />
       </View>
+      <ActivationDisclosure />
       <Pressable testID="create-icon-toggle" accessibilityRole="button" accessibilityState={{ expanded: showIcons }} onPress={() => { tap(); setShowIcons(v => !v); }} style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: 18, backgroundColor: pressed ? SURFACE_HI : SURFACE }]}>
         <Text style={{ fontFamily: F.s, fontSize: 15.5, color: c.inkForeground }}>{t('Choose an icon')}</Text>
         <Feather name={showIcons ? 'chevron-up' : 'chevron-down'} size={20} color="#8E8E93" />
@@ -268,6 +270,7 @@ export function EditAccount({ wallet, onBack, onDeleted }: { wallet: WalletState
           <NameCount name={name} />
           <TextInput testID="edit-name-input" autoFocus value={name} onChangeText={(v) => { setErr(null); setName((p) => limitName(v, p)); }} style={[st.input, { color: c.foreground }]} returnKeyType="done" onSubmitEditing={() => save({ name })} />
         </View>
+        <ActivationDisclosure />
         {err ? <Text style={{ fontFamily: F.m, color: c.destructive }}>{err}</Text> : null}
         <Btn testID="edit-name-save" label={t('Save')} loading={busy} onPress={() => save({ name })} />
       </Screen>

@@ -20,7 +20,8 @@ type Engine = {
   configureNode(url: string, tor: boolean): Promise<void>;
   snapshot(): Promise<NativeSnapshot>;
   subaddress(): Promise<NativeSnapshot>;
-  profile(id: string, name: string, icon: string): Promise<void>;
+  profile(id: string, name: string, icon: string, reportingDisclosed: boolean): Promise<void>;
+  reportActivation(config: string): Promise<void>;
   secret(id: string, recovery: boolean): Promise<string>;
   remove(id: string): Promise<void>;
   prepare(address: string, atomic: string): Promise<NativeQuote>;

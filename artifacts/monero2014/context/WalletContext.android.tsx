@@ -10,6 +10,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { loadNetworkPolicy } from '@/lib/network-policy';
 import { observeScan, SYNC_CALIBRATION_KEY, type ScanWindow } from '@/lib/sync-estimate';
 import { requireUnlockedSession } from '@/lib/session-policy';
+import activationConfig from '@/config/activation-reporting.json';
 export { WALLET_STORAGE_KEY, REQUIRED_CONFIRMATIONS, balances } from '@/lib/wallet-model';
 export type { Tx, TxKind, WalletState } from '@/lib/wallet-model';
 
@@ -104,7 +105,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (!snapshot?.id) return;
     const timer = setInterval(() => {
       if (!active.current) return;
-      void run(async () => publish(await nativeEngine().snapshot())).catch(e => {
+      void run(async () => {
+        publish(await nativeEngine().snapshot());
+        if (sessionStatus.current === 'unlocked' && active.current && activationConfig.enabled) {
+          await nativeEngine().reportActivation(JSON.stringify(activationConfig));
+        }
+      }).catch(e => {
         if (mounted.current) setError(e instanceof Error ? e.message : 'Scanning failed.');
       });
     }, 3000);
@@ -153,7 +159,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (!a) throw new Error('Account not found.');
       const name = validatedWalletName(profile.name ?? a.name);
       const icon: AvatarId = profile.iconId ?? (isAvatarId(a.iconId) ? a.iconId : 'monero');
-      await nativeEngine().profile(id, name, icon);
+      await nativeEngine().profile(id, name, icon, activationConfig.enabled && profile.name !== undefined);
       setAccounts(await nativeEngine().list());
     }),
     deleteWallet: async (id, secret, signal) => {

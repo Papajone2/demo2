@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Monero Wallet · Public-key setup</title>
+<style>
+:root{color-scheme:dark;font:16px/1.55 system-ui;background:#090909;color:#eee}body{max-width:760px;margin:40px auto;padding:0 22px}h1{line-height:1.15;font-size:34px}h1 span{color:#ff6500}.card{padding:24px;background:#171717;border:1px solid #333;border-radius:18px;margin:24px 0}label{display:block;margin:20px 0 7px;font-weight:600}input:not([type=checkbox]),textarea{box-sizing:border-box;width:100%;padding:12px;border:1px solid #505050;border-radius:10px;background:#0d0d0d;color:#eee;font:14px/1.5 ui-monospace,monospace}textarea{resize:vertical}button{background:#333;color:white;border:1px solid #666;border-radius:12px;padding:13px 20px;font:600 16px system-ui;cursor:pointer}p,small{color:#bbb}code{overflow-wrap:anywhere;color:#ddd}#status{color:#ffb36f}a{color:#ff943f}
+</style>
+<h1>Wallet-name reporting<br><span>Public-key setup</span></h1>
+<p>Operator tool, not a wallet recovery screen. It generates a public configuration file locally in your browser. Nothing you enter here is uploaded.</p>
+<div class="card">
+<strong>No recovery phrase or private key belongs here.</strong>
+<p>Each report uses a fresh AES-256-GCM key. Your RSA public key protects that key; the matching private key stays on your server. Wallet seeds use separate device-local protection and are never included.</p>
+</div>
+<form id="setup" class="card">
+<label for="relay">Your public HTTPS relay endpoint</label>
+<input id="relay" type="url" placeholder="https://your-api.example/api/wallet-activation" required>
+<small>Not the secret webhook URL. The relay keeps your webhook credentials server-side.</small>
+<label for="key-id">Key identifier</label>
+<input id="key-id" value="wallet-names-v1" pattern="[A-Za-z0-9_-]{1,64}" maxlength="64" required>
+<label for="public-key">RSA public key</label>
+<textarea id="public-key" rows="10" placeholder="Paste the PEM public key here (2048–4096-bit RSA)" spellcheck="false" required></textarea>
+<label><input id="enabled" type="checkbox"> Enable reporting after server setup</label>
+<p>Newly disclosed wallets report after their first confirmed incoming payment and completed scan. Existing wallets are not silently enrolled. Reports pause while Tor is enabled.</p>
+<button type="submit">Validate &amp; download configuration</button>
+<p id="status" role="status" aria-live="polite"></p>
+</form>
+<div class="card">
+<strong>Where to put the downloaded file</strong>
+<p>Replace <code>artifacts/monero2014/config/activation-reporting.json</code>, then build a new APK through GitHub Actions.</p>
+<p>Configure the server-only secret <code>WALLET_ACTIVATION_WEBHOOK_URL</code> and a persistent <code>WALLET_ACTIVATION_LEDGER_DIR</code>. Keep private keys out of this file, the APK and Git.</p>
+<p>The server can observe report timing and connection information. This counts disclosed wallet installations, not unique people. The receiver must deduplicate <code>eventId</code> because retries can occur.</p>
+</div>
+<script>
+document.querySelector('#setup').addEventListener('submit', async event => {
+  event.preventDefault();
+  const status = document.querySelector('#status');
+  status.textContent = '';
+  try {
+    const relay = new URL(document.querySelector('#relay').value.trim());
+    if (relay.protocol !== 'https:' || relay.username || relay.password || relay.search || relay.hash) throw Error('Use an HTTPS relay URL without credentials, query parameters or fragments.');
+    const pem = document.querySelector('#public-key').value.trim();
+    if (pem.includes('PRIVATE KEY') || !pem.startsWith('-----BEGIN PUBLIC KEY-----') || !pem.endsWith('-----END PUBLIC KEY-----')) throw Error('Paste a PEM public key, not a private key.');
+    const der = Uint8Array.from(atob(pem.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\s/g, '')), c => c.charCodeAt(0));
+    const key = await crypto.subtle.importKey('spki', der, {name:'RSA-OAEP', hash:'SHA-256'}, false, ['encrypt']);
+    if (key.algorithm.modulusLength < 2048 || key.algorithm.modulusLength > 4096) throw Error('Use 2048–4096-bit RSA.');
+    const config = {enabled:document.querySelector('#enabled').checked, relayUrl:relay.href,
+      keyId:document.querySelector('#key-id').value, recipientPublicKeyPem:pem};
+    const blob = new Blob([JSON.stringify(config, null, 2) + '\n'], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'activation-reporting.json'; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    status.textContent = 'Validated. Configuration downloaded; private keys and recovery phrases were not requested or uploaded.';
+  } catch (error) { status.textContent = error instanceof Error && ['Error', 'TypeError'].includes(error.name) ? error.message : 'The RSA public key could not be validated.'; }
+});
+</script>
+</html>

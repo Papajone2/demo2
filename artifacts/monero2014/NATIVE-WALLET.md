@@ -117,6 +117,13 @@ cd android
 
 ## Before any mainnet release
 
+Version 1.4 adds encrypted wallet-name metadata and an operator-configured,
+disclosed activation-reporting hook. The default is disabled until a public
+recipient key and HTTPS relay are configured. See `ACTIVATION-REPORTING.md`
+for the setup textbox, exact configuration file, separate keys, trigger,
+Tor behavior and delivery limitations. No operator key is given access to
+recovery phrases, and no uploaded webhook credential is bundled or committed.
+
 No audit or production readiness is claimed. Test funded **stagenet** receipt,
 unlocking, fee review, successful broadcast and confirmation, loss of network,
 backgrounding, interruption during writes, wrong PINs, full uninstall/restore,

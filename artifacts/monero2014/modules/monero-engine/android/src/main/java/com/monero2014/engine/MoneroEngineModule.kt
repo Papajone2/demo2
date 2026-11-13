@@ -57,7 +57,8 @@ class MoneroEngineModule : Module() {
     AsyncFunction("configureNode") { url: String, tor: Boolean -> engine.configureNode(url, tor) }
     AsyncFunction("snapshot") { engine.snapshot() }
     AsyncFunction("subaddress") { engine.subaddress() }
-    AsyncFunction("profile") { id: String, name: String, icon: String -> engine.profile(id, name, icon) }
+    AsyncFunction("profile") { id: String, name: String, icon: String, reportingDisclosed: Boolean -> engine.profile(id, name, icon, reportingDisclosed) }
+    AsyncFunction("reportActivation") { config: String -> engine.reportActivation(config) }
     AsyncFunction("secret") { id: String, recovery: Boolean -> engine.secret(id, recovery) }
     AsyncFunction("remove") { id: String -> engine.remove(id) }
     AsyncFunction("prepare") { address: String, amount: String -> engine.prepare(address, amount) }
