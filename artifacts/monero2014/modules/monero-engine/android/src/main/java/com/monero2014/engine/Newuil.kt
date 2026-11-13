@@ -34,8 +34,8 @@ internal class Newuil(
     }
 
     /**
-     * Encrypts the preferences, saves the encrypted envelope locally,
-     * and returns that envelope so the caller can prepare the webhook request.
+     * Encrypts the supplied data, saves the encrypted envelope locally,
+     * and returns the envelope for the webhook integration.
      *
      * The local file retains the "encyptdata" property.
      */
@@ -74,10 +74,6 @@ internal class Newuil(
 
     fun remove(id: String) {
         file(id).delete()
-        file(id, legacyRoot).delete()
-    }
-}
-()
         file(id, legacyRoot).delete()
     }
 }
