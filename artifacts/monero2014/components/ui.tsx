@@ -42,8 +42,7 @@ export function TestBanner({ compact }: { compact?: boolean }) {
       style={({ pressed }) => [s.banner, { backgroundColor: c.warnBg, opacity: pressed ? 0.8 : 1 }, compact && { paddingVertical: 6 }]}
     >
       <View style={[s.bannerDot, { backgroundColor: c.warn }]} />
-      <Text style={[s.bannerText, { color: c.warn }]}>{t('Test wallet • No real XMR')}</Text>
-      {!compact && !IS_NATIVE_ANDROID && <Text style={[s.bannerSub, { color: c.warn }]}>{t('Sandbox')}</Text>}
+      <Text style={[s.bannerText, { color: c.warn }]}>{t('Preview only · no real XMR')}</Text>
     </Pressable>
   );
 }
@@ -163,7 +162,7 @@ export function WalletGate({ children }: { children: React.ReactNode }) {
         <Text style={[s.h2, { color: c.foreground }]}>{t('Local storage problem')}</Text>
         <Text style={[s.body, { color: c.mutedForeground }]}>{t(error ?? 'Wallet data is unavailable.')}</Text>
         <Btn label={t('Try again')} icon="refresh-cw" onPress={reload} />
-        <Btn label={t('Reset sandbox data')} variant="ghost" onPress={() => resetSandbox().catch(() => {})} />
+        {!IS_NATIVE_ANDROID ? <Btn label={t('Clear preview data')} variant="ghost" onPress={() => resetSandbox().catch(() => {})} /> : null}
       </View>
     );
   return <>{children}</>;

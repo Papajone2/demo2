@@ -7,7 +7,7 @@ import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-nati
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { GRow, Group, Notice, TopBar } from '@/components/account-ui';
 import { LanguageList } from '@/components/language-picker';
-import { SITE } from '@/components/LockGate';
+import { WEBSITE_LINKS } from '@/lib/external-links';
 import { Btn, F, tap, useInsets, WalletGate } from '@/components/ui';
 import { WalletAvatar } from '@/components/wallet-avatar';
 import { useLanguage } from '@/context/LanguageContext';
@@ -171,8 +171,8 @@ function Settings() {
         try { await resetTutorial(state.id); router.replace('/'); }
         catch { setTourError(t('Could not restart the tour. Please try again.')); }
       } },
-      { key: 'help', icon: 'help-circle', title: t('Help & Support'), external: true, go: () => open(SITE) },
-      { key: 'about', icon: 'info', title: t('About monero2014'), external: true, go: () => open(`${SITE}/about`) },
+      { key: 'help', icon: 'help-circle', title: t('Help & Support'), external: true, go: () => open(WEBSITE_LINKS.support) },
+      { key: 'about', icon: 'info', title: t('About monero2014'), external: true, go: () => open(WEBSITE_LINKS.about) },
     ] },
   ];
   const needle = q.trim().toLowerCase();

@@ -22,7 +22,7 @@ function Detail() {
     return (
       <View style={{ flex: 1, backgroundColor: c.background, justifyContent: 'center', padding: 24 }}>
         <Stack.Screen options={{ title: t('Transaction') }} />
-        <EmptyState icon="help-circle" title={t('Transaction not found')} body={IS_NATIVE_ANDROID ? t('Try a different search or filter.') : t('It may have been removed by a sandbox reset.')} />
+        <EmptyState icon="help-circle" title={t('Transaction not found')} body={t('Try a different search or filter.')} />
         <Btn label={t('Back')} onPress={() => router.back()} />
       </View>
     );
@@ -77,7 +77,7 @@ function Detail() {
           }
         }}
       />
-      {!IS_NATIVE_ANDROID ? <Text style={[ui.hint, { color: c.mutedForeground, textAlign: 'center' }]}>{t('Sandbox record only. There is no on-chain transaction to look up.')}</Text> : pending ? <Text style={[ui.hint, { color: c.mutedForeground }]}>{t('Confirmation times are estimates, not guarantees. Funds are still syncing; wait until fully synced before sending.')}</Text> : null}
+      {!IS_NATIVE_ANDROID ? <Text style={[ui.hint, { color: c.mutedForeground, textAlign: 'center' }]}>{t('Preview record only. No on-chain transaction exists.')}</Text> : pending ? <Text style={[ui.hint, { color: c.mutedForeground }]}>{t('Confirmation times are estimates, not guarantees. Funds are still syncing; wait until fully synced before sending.')}</Text> : null}
     </ScrollView>
   );
 }

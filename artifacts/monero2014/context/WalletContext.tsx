@@ -155,7 +155,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (amount <= BigInt(0)) throw new Error('Amount must be greater than zero.');
     const tx: Tx = { id: randomId(), kind: 'in', amount: amount.toString(), fee: '0',
       confirmations: pending ? 0 : REQUIRED_CONFIRMATIONS, address: newTestAddress(),
-      note: note ?? (pending ? 'Simulated incoming transfer' : 'Test funds added'), createdAt: Date.now() };
+      note: note ?? 'Preview only · no real XMR', createdAt: Date.now() };
     return { next: { ...s, txs: [tx, ...s.txs] }, result: undefined };
   }), [mutateSelected]);
   const advanceBlocks = useCallback<Ctx['advanceBlocks']>(n => mutateSelected(s => {

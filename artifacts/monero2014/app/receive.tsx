@@ -69,7 +69,7 @@ function Receive() {
         <Text style={{ fontFamily: F.s, fontSize: 13, color: isCurrent ? c.primary : c.mutedForeground }}>{isCurrent ? t('Current address') : t('Saved address')}</Text>
         <Text selectable testID="receive-address" style={[st.addr, { color: c.foreground }]}>{shown}</Text>
         <QrCode testID="receive-qr" value={shown} size={208} />
-        {!IS_NATIVE_ANDROID || state.network === 'stagenet' ? <Text testID="receive-disclosure" style={{ fontFamily: F.r, fontSize: 12.5, color: c.mutedForeground }}>{IS_NATIVE_ANDROID ? t('Test wallet · not for real deposits') : t('Preview address · not for real deposits')}</Text> : null}
+        {!IS_NATIVE_ANDROID || state.network === 'stagenet' ? <Text testID="receive-disclosure" style={{ fontFamily: F.r, fontSize: 12.5, color: c.mutedForeground }}>{IS_NATIVE_ANDROID ? t('This wallet cannot receive deposits on this network.') : t('Preview address · not for real deposits')}</Text> : null}
       </View>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <Btn testID="copy-address" label={copied ? t('Copied') : t('Copy')} icon={copied ? 'check' : 'copy'} variant="soft" onPress={copy} style={{ flex: 1 }} />

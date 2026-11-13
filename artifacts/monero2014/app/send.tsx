@@ -116,7 +116,7 @@ function Send() {
         autoCorrect={false}
         mono
         error={errs.addr}
-        hint={t('Real Monero addresses are rejected in the sandbox.')}
+        hint={t('Real Monero addresses are not supported in the preview.')}
       />
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Pressable testID="send-paste" style={[st.mini, { backgroundColor: c.charcoal }]} onPress={async () => { try { const v = await Clipboard.getStringAsync(); setAddr(v.trim()); } catch { setErrs({ addr: t('Clipboard unavailable on this device.') }); } }}>
