@@ -38,7 +38,19 @@ internal class WalletEngine(private val context: Context) {
   @Volatile private var foreground = true
   @Volatile private var backgroundCloseFailed = false
   private fun torEnabled() = prefs.getBoolean("tor", false)
-  private fun defaultDaemon() = if (network == 0) "https://xmr.nodely.dev:18089" else "https://xmr.nodely.dev:38089"
+  private fun defaultDaemon() = if (network == 0) "https://xmr-node.cakewallet.com:18081" else "https://xmr.nodely.dev:38089"
+  private fun configuredDaemon(): String {
+    val saved = prefs.getString("daemon-$network",
+      if (network == 2) prefs.getString("daemon", defaultDaemon()) else defaultDaemon())!!
+    // One-time migration of the old built-in URL, not repeated on later
+    // explicit choices. Preserve all other custom URLs and onion configs.
+    if (network == 0 && !torEnabled() && !prefs.getBoolean("community-default-v1", false)) {
+      val next = if (saved == "https://xmr.nodely.dev:18089") defaultDaemon() else saved
+      check(prefs.edit().putBoolean("community-default-v1", true).putString("daemon-0", next).commit())
+      return next
+    }
+    return saved
+  }
   private fun networkLabel() = if (network == 0) "mainnet" else "stagenet"
 
   private fun text(p: Pointer): String = try { p.getString(0, "UTF-8") } finally { api.MONERO_free(p) }
@@ -180,7 +192,9 @@ internal class WalletEngine(private val context: Context) {
     val id = selected ?: error("Open a wallet first.")
     // Stop the old connection before changing privacy mode; never fall back.
     close()
-    check(prefs.edit().putBoolean("tor", tor).putString("daemon-$network", url).commit())
+    val changes = prefs.edit().putBoolean("tor", tor).putString("daemon-$network", url)
+    if (network == 0) changes.putBoolean("community-default-v1", true)
+    check(changes.commit())
     open(id)
     connect(url)
   }
@@ -214,8 +228,7 @@ internal class WalletEngine(private val context: Context) {
       "complete" to (connected && api.MONERO_Wallet_synchronized(w) != 0.toByte()),
       "network" to networkLabel(),
       "tor" to torEnabled(),
-      "daemon" to (prefs.getString("daemon-$network",
-        if (network == 2) prefs.getString("daemon", defaultDaemon()) else defaultDaemon())!!),
+      "daemon" to configuredDaemon(),
       "broadcastWarning" to (prefs.getString("broadcast-$selected", "")!!))
   }
   @Synchronized fun subaddress(): Map<String, Any> {

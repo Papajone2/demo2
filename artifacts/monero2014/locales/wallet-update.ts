@@ -1,6 +1,7 @@
 /** Wallet update copy, ordered es/de/fr/pt/ru/zh-Hans/ja/ko/tr/hi.
  * English remains the canonical source; placeholders must match exactly.
  */
+import { withWalletRefinements } from './wallet-refinements.ts';
 const languages = ['es', 'de', 'fr', 'pt', 'ru', 'zh-Hans', 'ja', 'ko', 'tr', 'hi'];
 const rows: Record<string, string[]> = {
   'Enter a recipient address first.': ['Introduce primero la dirección del destinatario.', 'Gib zuerst eine Empfängeradresse ein.', 'Saisissez d’abord l’adresse du destinataire.', 'Digite primeiro o endereço do destinatário.', 'Сначала введите адрес получателя.', '请先输入收款地址。', '先に受取人のアドレスを入力してください。', '먼저 받는 주소를 입력하세요.', 'Önce alıcı adresini girin.', 'पहले प्राप्तकर्ता का पता डालें।'],
@@ -147,5 +148,5 @@ export function withWalletUpdates(language: string, original: Record<string, str
     if (values.length !== languages.length || !values[index]) throw new Error(`Incomplete wallet translation: ${key}`);
     original[key] = values[index];
   }
-  return original;
+  return withWalletRefinements(language, original);
 }

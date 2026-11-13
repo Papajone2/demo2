@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CustomizeFlow, EditAccount } from '@/components/account-flows';
-import { SecretPrompt, TopBar } from '@/components/account-ui';
+import { TopBar } from '@/components/account-ui';
 import { Onboarding } from '@/components/welcome-flow';
 import { WalletSetup } from '@/components/wallet-setup';
 import { Btn, F, tap, useInsets } from '@/components/ui';
@@ -28,45 +28,28 @@ export default function AccountsScreen() {
     Animated.spring(drop, { toValue: 0, useNativeDriver: Platform.OS !== 'web', speed: 14, bounciness: 3 }).start();
   }, [drop]);
 
-  const [auth, setAuth] = useState<{ id: string; then: '/' | '/receive' } | null>(null);
+  const [switching, setSwitching] = useState(false);
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
 
   const go = (then: '/' | '/receive') => { if (then === '/') close(); else router.replace('/receive'); };
-  const pick = (id: string, then: '/' | '/receive') => {
+  const pick = async (id: string, then: '/' | '/receive') => {
     if (busy.current) return;
     setErr(null);
     tap();
     if (id === selectedId) return go(then); // same wallet: nothing changes, no prompt
     abort.current?.abort();
     abort.current = new AbortController();
-    setAuth({ id, then });
+    busy.current = true; setSwitching(true);
+    try {
+      await selectWallet(id, undefined, abort.current.signal);
+      if (!abort.current?.signal.aborted) { tap('success'); go(then); }
+    } catch (e) {
+      if (!abort.current?.signal.aborted) setErr(e instanceof Error ? t(e.message) : t('Could not switch account.'));
+    } finally { busy.current = false; setSwitching(false); }
   };
-  const cancelAuth = () => { abort.current?.abort(); abort.current = null; setAuth(null); };
 
   let inner: React.ReactNode = null;
-  if (auth) {
-    const target = wallets.find((x) => x.id === auth.id);
-    inner = (
-      <View style={{ flex: 1 }}>
-        <TopBar title={t('Switch account')} onBack={cancelAuth} testID="switch-cancel-top" />
-        <View style={{ flex: 1, justifyContent: 'center', padding: 20, paddingBottom: ins.bottom + 20 }}>
-          <SecretPrompt title={t('Enter your PIN or password to open {name}', { name: target?.name ?? '' })} cta={t('Switch')} onCancel={cancelAuth}
-            onSubmit={async (secret) => {
-              busy.current = true;
-              try { await selectWallet(auth.id, secret, abort.current?.signal); }
-              catch (e) { return e instanceof Error ? t(e.message) : t('Could not switch account.'); }
-              finally { busy.current = false; }
-              tap('success');
-              const then = auth.then;
-              setAuth(null);
-              go(then);
-              return null;
-            }} />
-        </View>
-      </View>
-    );
-  }
   if (mode.k === 'create') {
     inner = <NewWalletFlow defaultName={`Wallet ${nextWalletNumber}`} onCancel={() => setMode({ k: 'list' })} onDone={() => router.replace('/')} />;
   }
@@ -89,7 +72,7 @@ export default function AccountsScreen() {
           const on = w.id === selectedId;
           return (
             <Pressable key={w.id} testID={`account-${w.id}`} onPress={() => pick(w.id, '/')}
-              style={({ pressed }) => [st.row, { backgroundColor: pressed ? c.secondary : c.charcoal, borderColor: on ? c.primary : 'transparent' }]}>
+              disabled={switching} style={({ pressed }) => [st.row, { backgroundColor: pressed ? c.secondary : c.charcoal, borderColor: on ? c.primary : 'transparent', opacity: switching ? 0.6 : 1 }]}>
               <WalletAvatar id={w.iconId} size={42} />
               <View style={{ flex: 1 }}>
                 <Text numberOfLines={1} style={{ fontFamily: F.s, fontSize: 16.5, color: c.foreground }}>{w.name}</Text>

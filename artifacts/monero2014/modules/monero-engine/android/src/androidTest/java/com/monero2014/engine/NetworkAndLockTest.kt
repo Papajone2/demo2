@@ -9,6 +9,25 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class NetworkAndLockTest {
+  @Test fun communityDefaultMigratesWithoutReplacingCustomOrTorNodes() {
+    val context = InstrumentationRegistry.getInstrumentation().targetContext
+    val engine = WalletEngine(context)
+    engine.erase()
+    val prefs = context.getSharedPreferences("native-wallets-v1", android.content.Context.MODE_PRIVATE)
+    try {
+      prefs.edit().putString("daemon-0", "https://xmr.nodely.dev:18089").commit()
+      engine.create("Node policy", "", "0", 0)
+      assertEquals("https://xmr-node.cakewallet.com:18081", engine.snapshot()["daemon"])
+      // Later explicit choices must not be repeatedly overwritten.
+      prefs.edit().putString("daemon-0", "https://xmr.nodely.dev:18089").commit()
+      assertEquals("https://xmr.nodely.dev:18089", engine.snapshot()["daemon"])
+      prefs.edit().putString("daemon-0", "https://example.com:18089").commit()
+      assertEquals("https://example.com:18089", engine.snapshot()["daemon"])
+      val onion = "http://" + "b".repeat(56) + ".onion:18089"
+      prefs.edit().putBoolean("tor", true).putString("daemon-0", onion).commit()
+      assertEquals(onion, engine.snapshot()["daemon"])
+    } finally { engine.erase() }
+  }
   @Test fun torPolicyFailsClosedAndBackgroundStopsSync() {
     assertEquals("https", validateNode("https://example.com:18089", false).scheme)
     for (url in listOf("http://example.com", "https://user:pass@example.com", "https://example.com?x=1")) {
@@ -61,7 +80,7 @@ class NetworkAndLockTest {
       val mainId = main["id"] as String
       assertTrue((main["address"] as String).startsWith("4"))
       assertEquals("mainnet", engine.snapshot()["network"])
-      assertEquals("https://xmr.nodely.dev:18089", engine.snapshot()["daemon"])
+      assertEquals("https://xmr-node.cakewallet.com:18081", engine.snapshot()["daemon"])
       assertTrue(main["seed"] == engine.secret(mainId, true)) // Never print recovery words in assertions.
       assertTrue(Regex("[0-9a-f]{64}").matches(engine.secret(mainId, false)))
       assertTrue(test["seed"] == engine.secret(testId, true)) // Reveal inactive account without switching networks.

@@ -5,6 +5,7 @@ import { useWallet } from '@/context/WalletContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
 import { formatXmr } from '@/lib/money';
+import { durationRange } from '@/lib/sync-estimate';
 
 export function SyncDetails({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -21,7 +22,8 @@ export function SyncDetails({ children }: { children: React.ReactNode }) {
           <Text style={{ color: c.foreground }}>{sync.complete ? t('Synced') : t('Syncing')} · {Math.round(sync.progress * 100)}%</Text>
           <View style={{ backgroundColor: c.secondary, height: 8, borderRadius: 4 }}><View style={{ height: 8, borderRadius: 4, width: `${sync.progress * 100}%`, backgroundColor: c.primary }} /></View>
           <Text style={{ color: c.mutedForeground }}>{t('Blocks')}: {sync.height ?? '—'} / {sync.target || '—'}</Text>
-          <Text style={{ color: c.mutedForeground }}>{t('Estimated time')}: {sync.complete ? '—' : sync.remainingSeconds > 0 ? t('About {n} minutes', { n: Math.max(1, Math.ceil(sync.remainingSeconds / 60)) }) : t('Calculating…')}</Text>
+          <Text style={{ color: c.mutedForeground }}>{t('Estimated time')}: {sync.complete ? t('Synced') : sync.etaState === 'stalled' ? t('Waiting for scan progress…') : sync.etaLow && sync.etaHigh ? durationRange(sync.etaLow, sync.etaHigh, t) : sync.remainingSeconds > 0 ? t('About {n} minutes', { n: Math.max(1, Math.ceil(sync.remainingSeconds / 60)) }) : t('Calculating…')}</Text>
+          {!sync.complete ? <Text style={{ color: c.mutedForeground }}>{t('The estimate uses recent scan progress and updates as conditions change.')}</Text> : null}
           {[[t('Spendable'), available], [t('Pending'), locked], [t('Total'), total]].map(([label, amount]) => <View key={String(label)} style={{ flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ color: c.mutedForeground }}>{String(label)}</Text><Text style={{ color: c.foreground }}>{hidden ? '••••' : !sync.complete ? t('Pending') : `${formatXmr(amount as bigint, 8)} XMR`}</Text></View>)}
           <Text style={{ color: c.mutedForeground, lineHeight: 22 }}>{t('Your wallet scans Monero blocks on this device to find payments using your private view key. The key is not sent to the node. A restore can take longer; balances are shown after scanning finishes. New blocks arrive about every two minutes, but timing varies. Incoming payments usually become spendable after 10 confirmations. Your recovery phrase is never sent to a node.')}</Text>
           <Text style={{ color: c.mutedForeground }}>{t('Sync pauses when the app is in the background and resumes when you return. No background mining or always-running service is used.')}</Text>

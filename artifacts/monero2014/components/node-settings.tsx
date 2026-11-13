@@ -6,6 +6,8 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useWallet } from '@/context/WalletContext';
 import { IS_NATIVE_ANDROID, nativeEngine } from '@/lib/native-engine';
 import { loadNetworkPolicy, setMarketBlocked } from '@/lib/network-policy';
+import { COMMUNITY_NODES, ONION_NODES, FEATHER_NODE_SOURCE } from '@/lib/community-nodes';
+import * as WebBrowser from 'expo-web-browser';
 
 export function NodeSettings() {
   const c = useColors(), { t, errorMessage } = useLanguage(), { reload, state } = useWallet();
@@ -36,8 +38,9 @@ export function NodeSettings() {
     </View>
     <Text style={{ color: c.mutedForeground, lineHeight: 21 }}>{t('Tor requires Orbot running its SOCKS proxy on 127.0.0.1:9050 and a v3 onion node. Wallet connections go only through Tor, with no direct fallback. Price requests are disabled to prevent leaks. Syncing is usually slower. This does not route other apps through Tor.')}</Text>
     <Field label={t('Node URL')} value={url} onChangeText={setUrl} autoCapitalize="none" autoCorrect={false} placeholder={tor ? 'http://…onion:18081' : 'https://…'} />
-    {!tor ? <Btn label={t('Use default node')} variant="soft" disabled={busy} onPress={() => setUrl(state?.network === 'stagenet' ? 'https://xmr.nodely.dev:38089' : 'https://xmr.nodely.dev:18089')} /> : null}
-    {!tor && state?.network !== 'stagenet' ? <Btn label="Seth for Privacy · HTTPS" variant="ghost" disabled={busy} onPress={() => setUrl('https://node.sethforprivacy.com')} /> : null}
+    <Text style={{ color: c.mutedForeground }}>{t('Nodes from Feather’s published list. Inclusion is not a trust guarantee.')}</Text>
+    {state?.network !== 'stagenet' ? (tor ? ONION_NODES : COMMUNITY_NODES).map(node => <Btn key={node.url} label={`${node.name} · ${tor ? 'Tor' : 'HTTPS'}`} variant={url === node.url ? 'soft' : 'ghost'} disabled={busy} onPress={() => setUrl(node.url)} />) : !tor ? <Btn label={t('Use default node')} onPress={() => setUrl('https://xmr.nodely.dev:38089')} /> : null}
+    <Btn label={t('Source')} variant="ghost" onPress={() => { void WebBrowser.openBrowserAsync(FEATHER_NODE_SOURCE).catch(() => setError(t('Could not open browser.'))); }} />
     <Btn testID="node-save" label={t('Save and connect')} loading={busy} disabled={!IS_NATIVE_ANDROID || !url || busy} onPress={save} />
     {error ? <Text accessibilityRole="alert" style={{ color: c.destructive }}>{error}</Text> : null}
   </ScrollView>;

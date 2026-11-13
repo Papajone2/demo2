@@ -1,8 +1,8 @@
 import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { GRow, Group, Notice, TopBar } from '@/components/account-ui';
@@ -18,8 +18,9 @@ import { resetTutorial } from '@/lib/tutorial';
 import { centsToString, CURRENCIES, parseRateCents } from '@/lib/money';
 import { NodeSettings } from '@/components/node-settings';
 import { DestructionSettings } from '@/components/destruction-settings';
+import { ExchangeGuide } from '@/components/exchange-guide';
 
-type Panel = 'main' | 'prefs' | 'security' | 'tor' | 'language' | 'destruction';
+type Panel = 'main' | 'prefs' | 'security' | 'tor' | 'language' | 'destruction' | 'exchanges';
 const open = (url: string) => WebBrowser.openBrowserAsync(url).catch(() => {});
 const leave = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
@@ -130,7 +131,7 @@ function Language() {
   return <Scroll><LanguageList /></Scroll>;
 }
 
-const TITLES: Record<Panel, string> = { main: 'Settings', prefs: 'Preferences', security: 'Security & Privacy', tor: 'Nodes & Tor', language: 'Language', destruction: 'Destruction PIN or password' };
+const TITLES: Record<Panel, string> = { main: 'Settings', prefs: 'Preferences', security: 'Security & Privacy', tor: 'Nodes & Tor', language: 'Language', destruction: 'Destruction PIN or password', exchanges: 'Monero exchanges' };
 
 function Settings() {
   const c = useColors();
@@ -138,7 +139,9 @@ function Settings() {
   const { t, languageName } = useLanguage();
   const { state } = useWallet();
   const lock = useLock();
-  const [panel, setPanel] = useState<Panel>('main');
+  const params = useLocalSearchParams<{ panel?: string; tour?: string }>();
+  const [panel, setPanel] = useState<Panel>(() => params.panel === 'exchanges' ? 'exchanges' : 'main');
+  useEffect(() => { if (params.panel === 'exchanges') setPanel('exchanges'); }, [params.panel]);
   const [q, setQ] = useState('');
   const [tourError, setTourError] = useState<string | null>(null);
   if (!state) return null;
@@ -146,8 +149,8 @@ function Settings() {
   if (panel !== 'main') {
     return (
       <View style={{ flex: 1, backgroundColor: c.background }}>
-        <TopBar title={t(TITLES[panel])} onBack={() => setPanel('main')} />
-        {panel === 'prefs' ? <Prefs /> : panel === 'security' ? <Security onTor={() => setPanel('tor')} onDestruction={() => setPanel('destruction')} /> : panel === 'language' ? <Language /> : panel === 'destruction' ? <DestructionSettings /> : <NodeSettings />}
+        <TopBar title={t(TITLES[panel])} onBack={() => params.tour === '1' ? leave() : setPanel('main')} />
+        {panel === 'prefs' ? <Prefs /> : panel === 'security' ? <Security onTor={() => setPanel('tor')} onDestruction={() => setPanel('destruction')} /> : panel === 'language' ? <Language /> : panel === 'destruction' ? <DestructionSettings /> : panel === 'exchanges' ? <Scroll><ExchangeGuide onContinue={params.tour === '1' ? leave : undefined} /></Scroll> : <NodeSettings />}
       </View>
     );
   }
@@ -162,6 +165,7 @@ function Settings() {
       { key: 'security', icon: 'shield', title: t('Security & Privacy'), go: () => setPanel('security') },
     ] },
     { key: 'help', rows: [
+      { key: 'exchanges', icon: 'repeat', title: t('Monero exchanges'), go: () => setPanel('exchanges') },
       { key: 'tutorial', icon: 'play-circle', title: t('Replay wallet tour'), go: async () => {
         setTourError(null);
         try { await resetTutorial(state.id); router.replace('/'); }

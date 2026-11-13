@@ -8,6 +8,8 @@ import { useMarketHistory } from '@/hooks/useMarketData';
 import { AppState } from 'react-native';
 import { useLanguage } from '@/context/LanguageContext';
 import { loadNetworkPolicy } from '@/lib/network-policy';
+import { observeScan, SYNC_CALIBRATION_KEY, type ScanWindow } from '@/lib/sync-estimate';
+import { requireUnlockedSession } from '@/lib/session-policy';
 export { WALLET_STORAGE_KEY, REQUIRED_CONFIRMATIONS, balances } from '@/lib/wallet-model';
 export type { Tx, TxKind, WalletState } from '@/lib/wallet-model';
 
@@ -25,7 +27,9 @@ const accountState = (a: NativeAccount, snapshot: NativeSnapshot | null, prefs: 
 });
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
-  const { authorize } = useLock();
+  const { authorize, status } = useLock();
+  const sessionStatus = useRef(status);
+  sessionStatus.current = status;
   const { language } = useLanguage();
   const languageRef = useRef(language);
   languageRef.current = language;
@@ -36,8 +40,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
   const active = useRef(AppState.currentState === 'active');
-  const scanSample = useRef({ id: '', height: 0, time: 0 });
-  const [remainingSeconds, setRemaining] = useState(0);
+  const scanSample = useRef<ScanWindow | null>(null);
+  const savedCalibrationAt = useRef(0);
+  const [estimate, setEstimate] = useState({ seconds: 0, low: 0, high: 0, state: 'measuring' as 'measuring' | 'tracking' | 'stalled' | 'complete' });
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const run = useCallback(<T,>(work: () => Promise<T>): Promise<T> => {
     const task = queue.current.then(work);
@@ -46,17 +51,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const publish = useCallback((s: NativeSnapshot) => {
     if (!mounted.current) return;
-    const now = Date.now(), before = scanSample.current;
-    if (before.id !== s.id || s.height < before.height) {
-      scanSample.current = { id: s.id, height: s.height, time: now }; setRemaining(0);
-    } else if (now - before.time >= 10000 && s.height > before.height) {
-      const speed = (s.height - before.height) / ((now - before.time) / 1000);
-      setRemaining(Math.max(0, Math.ceil((s.target - s.height) / speed)));
-      scanSample.current = { id: s.id, height: s.height, time: now };
-    } else if (now - before.time > 30000) setRemaining(0);
+    const now = Date.now();
+    const measured = observeScan(scanSample.current, `${s.id}|${s.daemon}`, s.height, s.target, s.complete, now);
+    scanSample.current = measured.window;
+    setEstimate(measured);
+    if (measured.calibrated && now - savedCalibrationAt.current >= 60000) {
+      savedCalibrationAt.current = now;
+      void AsyncStorage.setItem(SYNC_CALIBRATION_KEY, JSON.stringify({ rate: measured.rate, at: now })).catch(() => {});
+    }
     setSnapshot(s);
   }, []);
   const load = useCallback(() => {
+    scanSample.current = null;
     setLoading(true); setError(null);
     void run(async () => {
       const engine = nativeEngine();
@@ -122,18 +128,23 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     total: BigInt(snapshot?.total ?? '0'),
     locked: BigInt(snapshot?.total ?? '0') - BigInt(snapshot?.available ?? '0'),
     sync: {
-      progress: snapshot?.target ? Math.min(1, snapshot.height / snapshot.target) : 0,
-      complete: snapshot?.complete ?? false, remainingSeconds, height: snapshot?.height, target: snapshot?.target,
+      progress: snapshot?.complete ? 1 : snapshot && snapshot.target > 0 ? Math.max(0, Math.min(1, snapshot.height / snapshot.target)) : 0,
+      complete: snapshot?.complete ?? false, remainingSeconds: estimate.seconds, height: snapshot?.height, target: snapshot?.target,
+      etaLow: estimate.low, etaHigh: estimate.high, etaState: estimate.state,
     },
     selectWallet: async (id, secret, signal) => {
-      const auth = await authorize(secret);
-      if (!auth.ok) throw new Error(auth.message);
-      await run(async () => {
-        if (signal?.aborted) throw new Error('Switch cancelled.');
-        const s = await nativeEngine().open(id);
-        publish(s);
-        try { await nativeEngine().connect(s.daemon); } catch { /* Offline: sending stays disabled. */ }
-      });
+      requireUnlockedSession(sessionStatus.current, active.current);
+      setLoading(true);
+      try {
+        await run(async () => {
+          if (signal?.aborted || !mounted.current) throw new Error('Switch cancelled.');
+          requireUnlockedSession(sessionStatus.current, active.current);
+          const s = await nativeEngine().open(id);
+          publish(s);
+          try { await nativeEngine().connect(s.daemon); } catch { /* Offline: sending stays disabled. */ }
+          publish(await nativeEngine().snapshot());
+        });
+      } finally { if (mounted.current) setLoading(false); }
     },
     // Native account creation must pass through backup UI, never silently discard a seed.
     createWallet: async () => { throw new Error('Use Native engine → Add or restore wallet, and back up its recovery phrase.'); },

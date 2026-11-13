@@ -8,3 +8,7 @@ export function estimatedRestoreHeight(year: number, month: number) {
   if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12 || timestamp < v2Time) return 0;
   return Math.max(0, 1009827 + Math.floor((timestamp - v2Time - 90 * 86400) / 120));
 }
+
+export function approximateChainHeight(now = Date.now()) {
+  return Math.max(0, 1009827 + Math.floor((now / 1000 - 1458748658) / 120));
+}

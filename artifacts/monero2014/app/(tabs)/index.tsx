@@ -9,7 +9,7 @@ import { Animated, type LayoutRectangle, Platform, Pressable, StyleSheet, Text, 
 import { MarketChart, MoneroLogo } from '@/components/market-chart';
 import { WalletAvatar } from '@/components/wallet-avatar';
 import { TOUR, TourError, TourOverlay, type TourTarget } from '@/components/wallet-tour';
-import { isTutorialDone, markTutorialDone } from '@/lib/tutorial';
+import { isTutorialDone, markTutorialDone, saveTutorialResume, tutorialResume } from '@/lib/tutorial';
 import { EmptyState, F, tap, TxRow, useInsets, WalletGate } from '@/components/ui';
 import { REQUIRED_CONFIRMATIONS, useWallet } from '@/context/WalletContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -57,13 +57,13 @@ function Overview() {
   useFocusEffect(useCallback(() => {
     if (!wid || !ready) return undefined;
     let live = true;
-    isTutorialDone(wid).then((d) => { if (live) { setStep(0); setTour(d ? 'idle' : 'show'); } }).catch(() => { if (live) setTour('error'); });
+    Promise.all([isTutorialDone(wid), tutorialResume(wid)]).then(([d, resume]) => { if (live) { setStep(d ? 0 : Math.min(resume, TOUR.length - 1)); setTour(d ? 'idle' : 'show'); } }).catch(() => { if (live) setTour('error'); });
     return () => { live = false; setTour('idle'); setStep(0); setTourErr(null); };
   }, [wid, ready, check]));
   const target: TourTarget | null = tour === 'show' ? TOUR[step].target : null;
   // Target rect in content coords, then the scroll offset that keeps it above the bottom-anchored card.
   const content = (() => {
-    if (!target) return null;
+    if (!target || target === 'exchanges') return null;
     const A = lay.actions;
     const n = target === 'sync' ? lay.sync : lay[target];
     if (!n || (target !== 'sync' && !A)) return null;
@@ -271,18 +271,18 @@ function Overview() {
           </View>
         </Pressable>
 
-        <View style={st.recentHead}>
+        <Pressable accessibilityRole="button" onPress={() => router.push('/activity')} style={st.recentHead}>
           <Text style={{ fontFamily: F.s, fontSize: 19, color: c.foreground }}>{t('Recent Activity')}</Text>
           <Pressable testID="see-all" onPress={() => router.push('/activity')} hitSlop={10} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Text style={{ fontFamily: F.s, color: c.foreground, fontSize: 15 }}>{t('See all')}</Text>
             <Feather name="arrow-right" size={15} color={c.foreground} />
           </Pressable>
-        </View>
+        </Pressable>
         <View style={{ marginTop: 12 }}>
-          {recent.length ? recent.map((t) => <TxRow key={t.id} tx={t} />) : (
-            <View style={{ backgroundColor: c.card, borderRadius: 20 }}>
+          {recent.length ? recent.map((t) => <TxRow key={t.id} tx={t} onPress={() => router.push('/activity')} />) : (
+            <Pressable testID="empty-activity-open" accessibilityRole="button" onPress={() => router.push('/activity')} style={{ backgroundColor: c.card, borderRadius: 20 }}>
               <EmptyState icon="inbox" title={t('No activity yet')} body={t('Incoming and outgoing transfers will appear here.')} />
-            </View>
+            </Pressable>
           )}
         </View>
 
@@ -294,7 +294,15 @@ function Overview() {
       </Animated.ScrollView>
       {tour === 'show' ? (
         <TourOverlay step={step} onCardHeight={(h) => setCardH((o) => (Math.abs(o - h) < 0.5 ? o : h))} busy={tourBusy} error={tourErr} onBack={() => setStep((n) => Math.max(0, n - 1))} onSkip={finishTour}
-          onNext={() => (step === TOUR.length - 1 ? finishTour() : setStep(step + 1))} />
+          onNext={() => {
+            if (step === TOUR.length - 1) { void finishTour(); return; }
+            if (TOUR[step].target !== 'exchanges') { setStep(step + 1); return; }
+            if (!wid || tourBusy) return;
+            setTourBusy(true);
+            void saveTutorialResume(wid, step + 1).then(() => {
+              setTour('idle'); router.push({ pathname: '/settings', params: { panel: 'exchanges', tour: '1' } });
+            }).catch(() => setTourErr(t('Could not save. Try again.'))).finally(() => setTourBusy(false));
+          }} />
       ) : tour === 'error' ? (
         <TourError onRetry={() => { setTour('idle'); setCheck((n) => n + 1); }} onDismiss={() => setTour('idle')} />
       ) : null}

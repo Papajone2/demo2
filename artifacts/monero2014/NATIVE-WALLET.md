@@ -133,3 +133,45 @@ signing identity only through a secrets flow, never source control or chat.
 Do not treat this as a production wallet before independent wallet-security
 review and device acceptance criteria pass. Never use a funded recovery phrase
 in automated tests.
+
+## Version 1.3 usability and node update
+
+Mainnet now defaults to `https://xmr-node.cakewallet.com:18081`, with
+`https://node.monerodevs.org:18089` and `https://node.sethforprivacy.com`
+as explicit alternatives. These operators are present in Feather's published
+node list at commit `f43b8de3d59d2c31592903140172e224b358130e`
+(`src/assets/nodes.json`). HTTPS endpoints were independently checked for valid
+TLS, synchronized mainnet status and matching heights on 2026-11-13. The
+Seth HTTPS endpoint uses port 443 rather than the self-signed endpoint on 18089.
+Availability and list inclusion do not establish operator trust. The engine
+continues to treat public daemons as untrusted. No Feather source algorithm was
+copied and no automatic multi-operator probing, quorum or failover is claimed.
+
+The old built-in Nodely mainnet URL is migrated once. Other custom endpoints and
+onion configurations are retained, as are wallet network and installation data.
+Later explicit custom choices are not repeatedly overridden. Plowsof and
+Rucknium onion presets also come from Feather's list; live onion connectivity
+has not been verified. Orbot remains required, and Tor never falls back direct.
+
+Restore planning uses a broad assumed 40–400 blocks/second range until an actual
+device scan has been measured. This is an explicitly labelled planning
+assumption, not a benchmark, per-year promise or guaranteed upper bound.
+Previously measured rates are used only for seven days and retain a wide
+uncertainty range. Live estimates exclude initial height fast-forwarding, need
+30 seconds of measured progress after warm-up, use a rolling two-minute window,
+reset between wallets/nodes/resumes, and show waiting after 45 seconds without
+progress. Completed scans clear their ETA. Block density, networking and Tor
+can put a real scan outside any preliminary range.
+
+Wallet switching reuses the unlocked session and checks it again at execution;
+it does not bypass the app lock. Deletion, secret export and security changes
+retain their separate authorization. Recent Activity opens full history.
+
+The exchange guide links to SimpleSwap and ChangeNOW without affiliate codes,
+wallet addresses, embedded trading, or transmission of secrets. Monero's
+Merchants & Exchanges page lists both, but explicitly disclaims endorsement.
+The guide says so, warns about fees, country/verification requirements and
+recovery phrases, and confirms before opening an external browser. Wallet Tor
+settings do not apply to that browser. Tutorial step three opens this guide
+and persists the resume point so returning continues to step four. Store
+declarations and regional rules must accurately reflect these external links.

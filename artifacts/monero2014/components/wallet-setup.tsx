@@ -8,8 +8,10 @@ import { Check, DEMO_TOKENS, Group, PillBtn, Row, sampleTokens, SampleTag, Setup
 import { msg, useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
 import { IS_NATIVE_ANDROID, nativeEngine } from '@/lib/native-engine';
-import { estimatedRestoreHeight } from '@/lib/restore-policy';
+import { approximateChainHeight, estimatedRestoreHeight } from '@/lib/restore-policy';
 import { validMnemonicWord } from '@/lib/mnemonic-validation';
+import AppStorage from '@/lib/app-storage';
+import { durationRange, planningRange, SYNC_CALIBRATION_KEY } from '@/lib/sync-estimate';
 
 type Step = 'choice' | 'warn' | 'phrase' | 'restore';
 export type SetupPath = 'create' | 'restore';
@@ -181,7 +183,17 @@ function Restore({ onBack, onDone, onRestore }: { onBack: () => void; onDone: ()
   const [height, setHeight] = useState('');
   const [dateStep, setDateStep] = useState(false);
   const [year, setYear] = useState(new Date().getFullYear());
-  const [month, setMonth] = useState(1);
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
+  const [measuredRate, setMeasuredRate] = useState<number>();
+  useEffect(() => {
+    let live = true;
+    void AppStorage.getItem(SYNC_CALIBRATION_KEY).then(raw => {
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (live && Number.isFinite(data.rate) && data.rate > 0 && data.at <= Date.now() && Date.now() - data.at < 7 * 86400000) setMeasuredRate(data.rate);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, []);
   const [touched, setTouched] = useState<Set<number>>(new Set());
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -204,7 +216,7 @@ function Restore({ onBack, onDone, onRestore }: { onBack: () => void; onDone: ()
   const submit = async () => {
     if (inflight.current) return;
     if (heightBad) { tap('error'); setErr(t('Restore height must be a whole number (0 or more).')); return; }
-    if (onRestore && !height && !dateStep) { setDateStep(true); return; }
+    if (!height && !dateStep) { setHeight(String(estimatedRestoreHeight(year, month))); setDateStep(true); return; }
     if (onRestore) {
       inflight.current = true; setBusy(true); setErr(null);
       try { await onRestore(words.map(w => w.trim()).join(' '), height || '0'); setWords(Array(count).fill('')); onDone(); }
@@ -219,18 +231,23 @@ function Restore({ onBack, onDone, onRestore }: { onBack: () => void; onDone: ()
   };
 
   if (dateStep) return <SetupPage testID="restore-date" step={t('Restore')} title={t('When did you create this wallet?')} onBack={() => setDateStep(false)}
-    sub={t('Choose a month before your first payment. The estimated block starts scanning earlier to allow for uncertainty. If unsure, scan from the beginning.')}
+    sub={t('Choose a month before your first payment. If unsure, choose the earliest year.')}
     footer={<PillBtn testID="restore-date-next" label={busy ? t('Restoring…') : t('Continue')} disabled={busy} onPress={submit} />}>
     <Text style={{ color: c.inkMuted }}>{t('Year')}</Text>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-      {Array.from({ length: new Date().getFullYear() - 2013 }, (_, i) => new Date().getFullYear() - i).map(y => <Pressable key={y} onPress={() => { setYear(y); setHeight(String(estimatedRestoreHeight(y, month))); }} style={{ padding: 10, borderRadius: 10, backgroundColor: year === y ? c.primary : SURFACE }}><Text style={{ color: c.inkForeground }}>{y}</Text></Pressable>)}
+      {Array.from({ length: new Date().getFullYear() - 2013 }, (_, i) => new Date().getFullYear() - i).map(y => <Pressable key={y} testID={`restore-year-${y}`} onPress={() => { const m = y === new Date().getFullYear() ? Math.min(month, new Date().getMonth() + 1) : month; setYear(y); setMonth(m); setHeight(String(estimatedRestoreHeight(y, m))); }} style={{ padding: 10, borderRadius: 10, backgroundColor: year === y ? c.primary : SURFACE }}><Text style={{ color: c.inkForeground }}>{y}</Text></Pressable>)}
     </View>
     <Text style={{ color: c.inkMuted }}>{t('Month')}</Text>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-      {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <Pressable key={m} onPress={() => { setMonth(m); setHeight(String(estimatedRestoreHeight(year, m))); }} style={{ padding: 10, borderRadius: 10, backgroundColor: month === m ? c.primary : SURFACE }}><Text style={{ color: c.inkForeground }}>{m}</Text></Pressable>)}
+      {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <Pressable key={m} testID={`restore-month-${m}`} disabled={year === new Date().getFullYear() && m > new Date().getMonth() + 1} onPress={() => { setMonth(m); setHeight(String(estimatedRestoreHeight(year, m))); }} style={{ padding: 10, borderRadius: 10, opacity: year === new Date().getFullYear() && m > new Date().getMonth() + 1 ? 0.3 : 1, backgroundColor: month === m ? c.primary : SURFACE }}><Text style={{ color: c.inkForeground }}>{m}</Text></Pressable>)}
     </View>
     <Text style={{ color: c.inkForeground }}>{t('Estimated starting block')}: {height || '0'}</Text>
-    <PillBtn testID="restore-genesis" label={t('Scan from the beginning')} onPress={() => setHeight('0')} />
+    <View testID="restore-time-estimate" style={{ padding: 18, gap: 10, borderRadius: 18, backgroundColor: SURFACE }}>
+      <Text style={{ color: c.inkMuted }}>{t('Estimated sync time')}</Text>
+      <Text style={{ color: c.primary, fontFamily: F.b, fontSize: 24 }}>{(() => { const estimate = planningRange(approximateChainHeight() - Number(height || 0), measuredRate); return durationRange(estimate.low, estimate.high, t); })()}</Text>
+      <Text style={{ color: c.inkMuted }}>{measuredRate ? t('Based on previous scans on this device.') : t('Broad estimate until this device measures scan speed.')}</Text>
+      <Text style={{ color: c.inkMuted, lineHeight: 20 }}>{t('Scan time varies with your device, node and block activity. Older restores can take hours; this is a planning range, not a guarantee.')}</Text>
+    </View>
     {err ? <Text style={{ color: c.destructive }}>{t(err)}</Text> : null}
   </SetupPage>;
   return (
