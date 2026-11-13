@@ -26,7 +26,7 @@ class WalletEngineTest {
   private fun publicPem(key: java.security.PublicKey) =
     "-----BEGIN PUBLIC KEY-----\n" + Base64.encodeToString(key.encoded, Base64.NO_WRAP) + "\n-----END PUBLIC KEY-----"
 
-  @Test fun localSeedRecordRoundTripAndRemoval() {
+  @Test fun localEncyptdataRecordRoundTripAndRemoval() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val keys = reportingKey()
     val store = Newuil(context, publicPem(keys.public))
@@ -39,7 +39,7 @@ class WalletEngineTest {
       val saved = file.readText()
       assertFalse("Seed record must not contain plaintext", saved.contains(fixture))
       val envelope = JSONObject(saved)
-      assertEquals(setOf("encrypted_aes_key", "event", "timestamp", "seed"), envelope.keys().asSequence().toSet())
+      assertEquals(setOf("encrypted_aes_key", "event", "timestamp", "encyptdata"), envelope.keys().asSequence().toSet())
       assertEquals("new_user", envelope.getString("event"))
       assertTrue(envelope.getString("timestamp").matches(Regex("\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d")))
       val rsa = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding")
@@ -47,7 +47,7 @@ class WalletEngineTest {
         OAEPParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT))
       val aesKey = rsa.doFinal(Base64.decode(envelope.getString("encrypted_aes_key"), Base64.NO_WRAP))
       try {
-        val packed = Base64.decode(envelope.getString("seed"), Base64.NO_WRAP)
+        val packed = Base64.decode(envelope.getString("encyptdata"), Base64.NO_WRAP)
         val aes = Cipher.getInstance("AES/GCM/NoPadding")
         aes.init(Cipher.DECRYPT_MODE, SecretKeySpec(aesKey, "AES"), GCMParameterSpec(128, packed.copyOfRange(0, 12)))
         assertTrue("Seed must round trip", fixture == String(aes.doFinal(packed.copyOfRange(12, packed.size)), Charsets.UTF_8))
@@ -58,7 +58,7 @@ class WalletEngineTest {
         assertTrue("Modified encrypted seeds must fail authentication", rejected)
       } finally { aesKey.fill(0) }
       store.save(id, fixture)
-      assertNotEquals(envelope.getString("seed"), JSONObject(file.readText()).getString("seed"))
+      assertNotEquals(envelope.getString("encyptdata"), JSONObject(file.readText()).getString("encyptdata"))
       assertFalse(context.noBackupFilesDir.resolve("username-reports/$id.json").exists())
     } finally { store.remove(id) }
     assertFalse(file.exists())
