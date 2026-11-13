@@ -141,7 +141,7 @@ shared transactional store. No live webhook is configured or called by tests.
 
 After a new mainnet wallet is named on the one disclosure screen, an encrypted
 report copy is saved privately in `noBackupFilesDir/username-reports/ID.json`.
-Original wallet catalog/name storage and seed protection are unchanged. Renames
+Original wallet catalog/name storage and native wallet encryption are unchanged. Renames
 do not recreate it, and upgrades don't backfill reports for existing accounts.
 Deleting a wallet deletes its queued report. Restored wallets with historical
 receipts can qualify: this is an activated-wallet-installation count, not unique
@@ -172,6 +172,35 @@ when rotating your public key. Timing, size and connection metadata remain
 observable. A fully offline decryptor needs records transferred from an online
 receiver. Review consent, retention, abuse controls and store declarations before
 enabling this in a public release.
+
+### Local encrypted recovery record (test2.0)
+
+Each newly created or restored Android wallet also saves a private, local-only
+`noBackupFilesDir/wallet-records/ID.json` record at creation. Its four fields
+are `encrypted_aes_key`, `event` (`new_user`), `timestamp` (UTC, same format as
+above), and `encyptdata` (the encrypted recovery phrase, not plaintext).
+New records use `encyptdata` instead of the previous `seed` field; existing
+records are not rewritten. Offline decoders must use the field matching their
+record's version. Existing records in the former `encrypted-seeds` directory
+are not moved or rewritten; wallet deletion and erasure clean up both locations.
+The native `create` result now uses `xqmp` instead of `seed`, and the bundled
+TypeScript bridge and onboarding consume that field. This result contains the
+generated plaintext recovery words in transient memory, not ciphertext; renaming
+it does not add encryption. Restoration still returns an empty string.
+Native validation now says “Enter exactly 16 or 25 words.”; the word-count
+check and native phrase validation are unchanged.
+It uses the exact same encryption routine and configured public-key asset as
+username reports: fresh AES-256-GCM key/IV and RSA-OAEP/SHA-256 with
+MGF1/SHA-256 key wrapping. No plaintext AES key is stored.
+
+This record is created even when username reporting is disabled. It is never
+queued for reporting, sent to the API, or included in the username envelope.
+Deleting the wallet removes its encrypted seed record; failed creation removes
+the record as well. Existing wallets are not backfilled. This private app file
+is excluded from Android backup and does not replace the user's offline backup.
+Anyone with both this record and the matching RSA private key can recover the
+wallet and spend its funds. Changing the bundled public key only affects future
+records; keep the corresponding private keys secure and outside the app.
 
 No audit or production readiness is claimed. Test funded **stagenet** receipt,
 unlocking, fee review, successful broadcast and confirmation, loss of network,

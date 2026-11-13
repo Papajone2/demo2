@@ -81,9 +81,9 @@ class NetworkAndLockTest {
       assertTrue((main["address"] as String).startsWith("4"))
       assertEquals("mainnet", engine.snapshot()["network"])
       assertEquals("https://xmr-node.cakewallet.com:18081", engine.snapshot()["daemon"])
-      assertTrue(main["seed"] == engine.secret(mainId, true)) // Never print recovery words in assertions.
+      assertTrue(main["xqmp"] == engine.secret(mainId, true)) // Never print recovery words in assertions.
       assertTrue(Regex("[0-9a-f]{64}").matches(engine.secret(mainId, false)))
-      assertTrue(test["seed"] == engine.secret(testId, true)) // Reveal inactive account without switching networks.
+      assertTrue(test["xqmp"] == engine.secret(testId, true)) // Reveal inactive account without switching networks.
       assertEquals("mainnet", engine.snapshot()["network"])
       engine.open(testId)
       assertEquals("stagenet", engine.snapshot()["network"])
