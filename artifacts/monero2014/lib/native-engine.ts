@@ -11,7 +11,7 @@ export type NativeSnapshot = {
 export type NativeQuote = { token: string; address: string; amount: string; fee: string; txid: string };
 type Engine = {
   list(): Promise<NativeAccount[]>;
-  create(name: string, seed: string, height: string, network: number): Promise<{ id: string; seed: string; address: string }>;
+  create(name: string, seed: string, height: string, network: number): Promise<{ id: string; xqmp: string; address: string }>;
   deriveSecret(secret: string, salt: string, iterations: number): Promise<string>;
   copyPrivateText(text: string): Promise<void>;
   open(id: string): Promise<NativeSnapshot>;

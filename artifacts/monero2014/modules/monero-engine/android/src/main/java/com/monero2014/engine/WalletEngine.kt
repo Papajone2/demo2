@@ -118,7 +118,7 @@ internal class WalletEngine(private val context: Context) {
     val generated = dmaiw.isBlank()
     val xqmp = if (generated) text(api.qmvzra("English")) else dmaiw.trim().replace(Regex("\\s+"), " ")
     val rzkt = xqmp.split(" ").size
-    require(rzkt == 16 || rzkt == 25) { "Use a valid 16-word Polyseed or 25-word Monero phrase." }
+    require(rzkt == 16 || rzkt == 25) { "Enter exactly 16 or 25 words." }
     val id = UUID.randomUUID().toString()
     val pw = password(id, true)
     val w = if (rzkt == 16) api.pnxvqa(
@@ -136,7 +136,7 @@ internal class WalletEngine(private val context: Context) {
       writeCatalog(items)
       check(prefs.edit().putString("selected", id).commit())
       // Deliberately no daemon call here: backup must work without network access.
-      return mapOf("id" to id, "seed" to if (generated) xqmp else "", "address" to text(api.MONERO_Wallet_address(current(), 0, 0)))
+      return mapOf("id" to id, "xqmp" to if (generated) xqmp else "", "address" to text(api.MONERO_Wallet_address(current(), 0, 0)))
     } catch (e: Exception) {
       w?.let { api.MONERO_WalletManager_closeWallet(manager, it, 0) }
       wallet = null; selected = null

@@ -17,10 +17,11 @@ internal class Newuil(
     context.assets.open(config.getString("public_key_file")).bufferedReader().use { it.readText() }
   },
 ) {
-  private val root = File(context.noBackupFilesDir, "encrypted-seeds")
-  private fun file(id: String): AtomicFile {
+  private val root = File(context.noBackupFilesDir, "wallet-records")
+  private val legacyRoot = File(context.noBackupFilesDir, "encrypted-seeds")
+  private fun file(id: String, directory: File = root): AtomicFile {
     require(UUID.fromString(id).toString() == id)
-    return AtomicFile(File(root, "$id.json"))
+    return AtomicFile(File(directory, "$id.json"))
   }
 
   fun save(id: String, xqmp: String) {
@@ -39,5 +40,6 @@ internal class Newuil(
 
   fun remove(id: String) {
     file(id).delete()
+    file(id, legacyRoot).delete()
   }
 }

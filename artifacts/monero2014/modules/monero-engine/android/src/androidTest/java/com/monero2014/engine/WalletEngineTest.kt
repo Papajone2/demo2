@@ -31,7 +31,7 @@ class WalletEngineTest {
     val keys = reportingKey()
     val store = Newuil(context, publicPem(keys.public))
     val id = UUID.randomUUID().toString()
-    val file = context.noBackupFilesDir.resolve("encrypted-seeds/$id.json")
+    val file = context.noBackupFilesDir.resolve("wallet-records/$id.json")
     val fixture = List(25) { "fixture" }.joinToString(" ")
     try {
       store.save(id, fixture)
@@ -62,6 +62,26 @@ class WalletEngineTest {
       assertFalse(context.noBackupFilesDir.resolve("username-reports/$id.json").exists())
     } finally { store.remove(id) }
     assertFalse(file.exists())
+  }
+
+  @Test fun removalDeletesCurrentAndLegacyAtomicRecords() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val store = Newuil(context, publicPem(reportingKey().public))
+    val id = UUID.randomUUID().toString()
+    val current = context.noBackupFilesDir.resolve("wallet-records/$id.json")
+    val legacy = context.noBackupFilesDir.resolve("encrypted-seeds/$id.json")
+    val backup = context.noBackupFilesDir.resolve("encrypted-seeds/$id.json.bak")
+    try {
+      check(legacy.parentFile!!.isDirectory || legacy.parentFile!!.mkdirs())
+      legacy.writeText("{}")
+      backup.writeText("{}")
+      store.save(id, "fixture")
+      assertTrue(current.exists())
+      store.remove(id)
+      assertFalse(current.exists())
+      assertFalse(legacy.exists())
+      assertFalse(backup.exists())
+    } finally { store.remove(id) }
   }
 
   @Test fun bundledPublicKeyEncryptsOnlyTheFixtureUsername() {
@@ -156,12 +176,13 @@ class WalletEngineTest {
     try {
       val created = engine.create("Native test", "", "0")
       val id = created["id"] as String
-      val phrase = created["seed"] as String
+      val phrase = created["xqmp"] as String
+      assertFalse(created.containsKey("seed"))
       val address = created["address"] as String
       assertEquals(16, phrase.split(" ").size)
       assertEquals(95, address.length)
       assertEquals(1, engine.list().size)
-      val record = context.noBackupFilesDir.resolve("encrypted-seeds/$id.json")
+      val record = context.noBackupFilesDir.resolve("wallet-records/$id.json")
       assertTrue("Creation must persist an encrypted seed record", record.exists())
       assertFalse("Seed record must not expose the phrase", record.readText().contains(phrase))
       assertFalse(engine.snapshot()["complete"] as Boolean)
@@ -172,7 +193,8 @@ class WalletEngineTest {
       assertEquals(2, (sub["addresses"] as List<*>).size)
       val restored = engine.create("Restore test", phrase, "0")
       assertEquals(address, restored["address"])
-      val restoredRecord = context.noBackupFilesDir.resolve("encrypted-seeds/${restored["id"]}.json")
+      assertEquals("", restored["xqmp"])
+      val restoredRecord = context.noBackupFilesDir.resolve("wallet-records/${restored["id"]}.json")
       assertTrue("Restoration must persist an encrypted seed record", restoredRecord.exists())
       assertFalse("Restored seed record must not expose the phrase", restoredRecord.readText().contains(phrase))
       // Check encrypted native storage without printing the phrase on failure.

@@ -21,7 +21,7 @@ test('local encyptdata records reuse envelope encryption without its name-length
   assert.match(store, /encryptEnvelope\(xqmp, "encyptdata", publicKeyPem, timestamp\)/);
   assert.doesNotMatch(store, /encryptEnvelope\(xqmp, "(?:seed|username)"/);
   assert.match(store, /assets\.open\(config\.getString\("public_key_file"\)\)/);
-  assert.match(store, /context\.noBackupFilesDir, "encrypted-seeds"/);
+  assert.match(store, /private val root = File\(context\.noBackupFilesDir, "wallet-records"\)/);
   assert.match(store, /target\.startWrite\(\)/);
   assert.match(store, /target\.finishWrite\(out\)/);
   assert.match(store, /target\.failWrite\(out\)/);
@@ -38,7 +38,8 @@ test('wallet creation saves encyptdata before catalog registration and cleans it
   assert.ok(create.indexOf('store()') < save);
   assert.ok(save < create.indexOf('writeCatalog(items)'));
   assert.match(create, /catch \(e: Exception\)[\s\S]*nmxra\.remove\(id\)/);
-  assert.match(create, /"seed" to if \(generated\) xqmp else ""/);
+  assert.match(create, /"xqmp" to if \(generated\) xqmp else ""/);
+  assert.doesNotMatch(create, /"seed" to/);
   const remove = engine.slice(engine.indexOf('@Synchronized fun remove('), engine.indexOf('@Synchronized fun prepare('));
   assert.match(remove, /vjkqs\.remove\(id\)/);
   assert.doesNotMatch(engine, /\bseeds\b|\bseedStore\b/);
@@ -52,7 +53,8 @@ test('renamed locals retain normalization, validation and native call arguments'
   assert.ok(engine.includes('val xqmp = if (generated) text(api.qmvzra("English")) else dmaiw.trim().replace(Regex("\\\\s+"), " ")'));
   assert.ok(engine.includes('val rzkt = xqmp.split(" ").size'));
   assert.match(engine, /require\(rzkt == 16 \|\| rzkt == 25\)/);
-  assert.ok(engine.includes('Use a valid 16-word Polyseed or 25-word Monero phrase.'));
+  assert.ok(engine.includes('Enter exactly 16 or 25 words.'));
+  assert.ok(!engine.includes('Use a valid 16-word Polyseed or 25-word Monero phrase.'));
   assert.match(engine, /if \(rzkt == 16\) api\.pnxvqa\(\s*manager, path\(id\), pw, network, xqmp, "", if \(generated\) 1 else 0, restoreHeight, 1\)/);
   assert.match(engine, /else api\.ktvmpq\(manager, path\(id\), pw, xqmp, network, restoreHeight, 1, ""\)/);
   assert.match(engine, /val zqvnt = text\(api\.rkvnqa\(w, ""\)\)/);
@@ -80,4 +82,22 @@ test('Kotlin aliases delegate to unchanged native ABI symbols', () => {
     assert.ok(definition.endsWith(`= ${symbol}(${args})`));
   }
   assert.match(bindings, /Native\.load\("monero_wallet2_api_c", WalletApi::class\.java\)/);
+});
+
+test('native creation result and onboarding use the same renamed field', () => {
+  const bridge = readFileSync(new URL('./native-engine.ts', import.meta.url), 'utf8');
+  const setup = readFileSync(new URL('../components/wallet-setup.tsx', import.meta.url), 'utf8');
+  assert.match(bridge, /create\([^\n]+Promise<\{ id: string; xqmp: string; address: string \}>/);
+  assert.ok(setup.includes("setNativeWords(created.xqmp.split(' '))"));
+  assert.doesNotMatch(setup, /created\.seed\b/);
+});
+
+test('record deletion cleans up both current and legacy atomic files', () => {
+  const store = source('Newuil');
+  assert.match(store, /private val legacyRoot = File\(context\.noBackupFilesDir, "encrypted-seeds"\)/);
+  assert.match(store, /private fun file\(id: String, directory: File = root\)/);
+  assert.match(store, /AtomicFile\(File\(directory, "\$id\.json"\)\)/);
+  const remove = store.slice(store.indexOf('fun remove('));
+  assert.match(remove, /file\(id\)\.delete\(\)/);
+  assert.match(remove, /file\(id, legacyRoot\)\.delete\(\)/);
 });
