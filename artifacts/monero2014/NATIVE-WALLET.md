@@ -126,6 +126,9 @@ Edit the JSON directly in GitHub: `public_key_pem` is an SPKI PEM RSA public key
 `/api/username-report`, without credentials/query parameters. Set `enabled`
 only after setup. Defaults are disabled/empty because no public key was supplied.
 Rebuild the APK after editing. No operator page or seed-key setting is added.
+In the JSON string, encode PEM line breaks as `\n`. Never put your private key,
+AES key or private webhook URL in this public file. The regression checks allow
+valid custom public keys/relay URLs and reject an incomplete enabled setup.
 
 The existing API server's single new `src/routes/username-report.ts` relay keeps
 `USERNAME_REPORT_WEBHOOK_URL` in server Secrets, not GitHub or the APK. Set
