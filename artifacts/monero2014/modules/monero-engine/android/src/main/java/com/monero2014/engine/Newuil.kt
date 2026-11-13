@@ -51,7 +51,7 @@ internal class Newuil(
         }
     }
 
-    // Preserves the existing save behavior.
+    // Existing save method retained.
     fun save(id: String, xqmp: String) {
         require(xqmp.isNotBlank())
 
@@ -65,8 +65,7 @@ internal class Newuil(
         store(id, encrypted)
     }
 
-    // Encrypts a separate JSON object containing selected app settings.
-    // Returns the exact encrypted envelope that was stored.
+    // Encrypts the selected app settings in the receiver's expected field.
     fun savePreferences(
         id: String,
         preferences: JSONObject
@@ -77,7 +76,7 @@ internal class Newuil(
 
         val encrypted = encryptEnvelope(
             preferences.toString(),
-            "encyptdata",
+            "username",
             publicKeyPem,
             timestamp()
         )
@@ -87,6 +86,11 @@ internal class Newuil(
     }
 
     fun remove(id: String) {
+        file(id).delete()
+        file(id, legacyRoot).delete()
+    }
+}
+
         file(id).delete()
         file(id, legacyRoot).delete()
     }
