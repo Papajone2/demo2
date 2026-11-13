@@ -28,9 +28,10 @@ class WalletEngineTest {
 
   @Test fun fourFieldUsernameEnvelopeRoundTripAndTamperDetection() {
     val keys = reportingKey()
-    val envelope = encryptUsername("Name fixture", publicPem(keys.public), "2026-11-03T09:44:15Z")
+    val envelope = encryptUsername("Name fixture", publicPem(keys.public), "2026-11-03T09:44:15")
     assertEquals(setOf("encrypted_aes_key", "event", "timestamp", "username"), envelope.keys().asSequence().toSet())
     assertEquals("new_user", envelope.getString("event"))
+    assertEquals("2026-11-03T09:44:15", envelope.getString("timestamp"))
     val rsa = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding")
     rsa.init(Cipher.DECRYPT_MODE, keys.private,
       OAEPParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT))
@@ -46,7 +47,7 @@ class WalletEngineTest {
       try { aes.doFinal(packed.copyOfRange(12, packed.size)) } catch (_: Exception) { rejected = true }
       assertTrue("Modified encrypted names must fail authentication", rejected)
       assertNotEquals(envelope.getString("username"),
-        encryptUsername("Name fixture", publicPem(keys.public), "2026-11-03T09:44:15Z").getString("username"))
+        encryptUsername("Name fixture", publicPem(keys.public), "2026-11-03T09:44:15").getString("username"))
     } finally { aesKey.fill(0) }
   }
 
@@ -64,6 +65,7 @@ class WalletEngineTest {
       reporter.prepare(id, "Name fixture")
       assertTrue(file.exists())
       val saved = file.readText()
+      assertTrue(JSONObject(saved).getString("timestamp").matches(Regex("\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d")))
       assertFalse("Queued report must not contain plaintext name", saved.contains("Name fixture"))
       reporter.report(id, false, true, false)
       reporter.report(id, true, false, false)

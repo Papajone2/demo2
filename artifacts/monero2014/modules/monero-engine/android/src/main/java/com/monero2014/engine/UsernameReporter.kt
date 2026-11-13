@@ -14,6 +14,9 @@ import java.security.interfaces.RSAPublicKey
 import java.security.spec.MGF1ParameterSpec
 import java.security.spec.X509EncodedKeySpec
 import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.UUID
 import javax.crypto.Cipher
 import javax.crypto.spec.OAEPParameterSpec
@@ -84,7 +87,9 @@ internal class UsernameReporter(
 
   @Synchronized fun prepare(id: String, username: String) {
     if (!configured() || prefs.getBoolean(id, false) || file(id).baseFile.exists()) return
-    val encrypted = encryptUsername(username, config.getString("public_key_pem"), Instant.now().toString())
+    val timestamp = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
+      .withZone(ZoneOffset.UTC).format(Instant.now())
+    val encrypted = encryptUsername(username, config.getString("public_key_pem"), timestamp)
     check(root.isDirectory || root.mkdirs())
     val target = file(id)
     val out = target.startWrite()

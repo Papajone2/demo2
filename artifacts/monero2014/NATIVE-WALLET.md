@@ -145,7 +145,8 @@ receipts can qualify: this is an activated-wallet-installation count, not unique
 people or independently verified proof of funding.
 
 Exactly four JSON fields: `encrypted_aes_key`, `event` (`new_user`), `timestamp`
-(UTC record-creation time), `username`. Each report uses a fresh random 32-byte
+(UTC record-creation time in the sample's `yyyy-MM-dd'T'HH:mm:ss` format, without
+a suffix), `username`. Each report uses a fresh random 32-byte
 AES key, AES-256-GCM with no AAD, and a random 12-byte IV. `username` is padded
 Base64 of **IV (12 bytes) || ciphertext || GCM tag (16 bytes)**.
 `encrypted_aes_key` is padded Base64 RSA-OAEP/SHA-256 with MGF1/SHA-256 over the

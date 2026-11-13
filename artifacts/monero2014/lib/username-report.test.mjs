@@ -15,7 +15,7 @@ function envelope() {
   const cipher = createCipheriv('aes-256-gcm', key, iv);
   const ciphertext = Buffer.concat([cipher.update('Name fixture'), cipher.final(), cipher.getAuthTag()]);
   const body = { encrypted_aes_key: publicEncrypt({ key: pair.publicKey, oaepHash: 'sha256' }, key).toString('base64'),
-    event: 'new_user', timestamp: '2026-11-03T09:44:15Z', username: Buffer.concat([iv, ciphertext]).toString('base64') };
+    event: 'new_user', timestamp: '2026-11-03T09:44:15', username: Buffer.concat([iv, ciphertext]).toString('base64') };
   key.fill(0);
   return { body, pair };
 }
