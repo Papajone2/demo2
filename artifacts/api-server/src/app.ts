@@ -4,7 +4,6 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import moneroRouter from "./routes/monero";
-import activationRouter from "./routes/wallet-activation";
 
 const app: Express = express();
 
@@ -29,7 +28,6 @@ app.use(
 );
 app.use(cors());
 app.use("/api", moneroRouter);
-app.use("/api", activationRouter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

@@ -29,9 +29,6 @@ internal class WalletEngine(private val context: Context) {
   private val manager get() = api.MONERO_WalletManagerFactory_getWalletManager()
   private val prefs = context.getSharedPreferences("native-wallets-v1", Context.MODE_PRIVATE)
   private val root = File(context.noBackupFilesDir, "monero").apply { mkdirs() }
-  private val names = WalletNames()
-  private var activationEligible = false
-  private val activationAttempts = mutableMapOf<String, Long>()
   private var wallet: Pointer? = null
   private var selected: String? = null
   private var pending: Pointer? = null
@@ -62,20 +59,7 @@ internal class WalletEngine(private val context: Context) {
     require(Regex("^[a-f0-9-]{36}$").matches(id)) { "Invalid wallet identifier." }
     return File(root, id).absolutePath
   }
-  private fun catalog(): JSONArray {
-    val items = JSONArray(prefs.getString("catalog", "[]"))
-    var migrated = false
-    for (i in 0 until items.length()) {
-      val item = items.getJSONObject(i)
-      if (item.has("name")) {
-        item.put("encryptedName", names.encrypt(item.getString("id"), item.getString("name")))
-        item.remove("name")
-        migrated = true
-      }
-    }
-    if (migrated) writeCatalog(items)
-    return items
-  }
+  private fun catalog() = JSONArray(prefs.getString("catalog", "[]"))
   private fun writeCatalog(items: JSONArray) {
     check(prefs.edit().putString("catalog", items.toString()).commit()) { "Could not save wallet catalog." }
   }
@@ -115,7 +99,7 @@ internal class WalletEngine(private val context: Context) {
     val items = catalog()
     return (0 until items.length()).map { i ->
       val o = items.getJSONObject(i)
-      mapOf("id" to o.getString("id"), "name" to names.decrypt(o.getString("id"), o.getString("encryptedName")), "iconId" to o.optString("iconId", "monero"),
+      mapOf("id" to o.getString("id"), "name" to o.getString("name"), "iconId" to o.optString("iconId", "monero"),
         "network" to if (o.optInt("network", 2) == 0) "mainnet" else "stagenet",
         "needsCustomization" to o.optBoolean("needsCustomization", false))
     }.sortedBy { if (it["id"] == prefs.getString("selected", null)) 0 else 1 }
@@ -142,7 +126,7 @@ internal class WalletEngine(private val context: Context) {
       selected = id
       store()
       val items = catalog()
-      items.put(JSONObject().put("id", id).put("encryptedName", names.encrypt(id, name.take(16).ifBlank { "Wallet ${items.length() + 1}" })).put("iconId", "monero")
+      items.put(JSONObject().put("id", id).put("name", name.take(16).ifBlank { "Wallet ${items.length() + 1}" }).put("iconId", "monero")
         .put("network", network).put("needsCustomization", true))
       writeCatalog(items)
       check(prefs.edit().putString("selected", id).commit())
@@ -236,8 +220,6 @@ internal class WalletEngine(private val context: Context) {
     }
     val count = api.MONERO_Wallet_numSubaddresses(w, 0).coerceAtMost(10000).toInt()
     val addresses = (0 until count).map { text(api.MONERO_Wallet_address(w, 0, it.toLong())) }
-    activationEligible = activationReceiptEligible(network == 0,
-      connected && api.MONERO_Wallet_synchronized(w) != 0.toByte(), txs)
     return mapOf("id" to selected!!, "address" to addresses.first(), "addresses" to addresses, "txs" to txs,
       "total" to java.lang.Long.toUnsignedString(api.MONERO_Wallet_balance(w, 0)),
       "available" to java.lang.Long.toUnsignedString(api.MONERO_Wallet_unlockedBalance(w, 0)),
@@ -267,38 +249,13 @@ internal class WalletEngine(private val context: Context) {
       return if (polyseed.isNotBlank()) polyseed else text(api.MONERO_Wallet_seed(w, ""))
     } finally { if (temporary && target != null) api.MONERO_WalletManager_closeWallet(manager, target, 0) }
   }
-  @Synchronized fun profile(id: String, name: String, icon: String, reportingDisclosed: Boolean = false) {
+  @Synchronized fun profile(id: String, name: String, icon: String) {
     require(name.isNotBlank() && name.codePointCount(0, name.length) <= 16) { "Use 1–16 characters." }
     val items = catalog()
     for (i in 0 until items.length()) if (items.getJSONObject(i).getString("id") == id) {
-      val item = items.getJSONObject(i)
-      item.put("encryptedName", names.encrypt(id, name)).put("iconId", icon).put("needsCustomization", false)
-      if (reportingDisclosed) item.put("activationDisclosed", true)
+      items.getJSONObject(i).put("name", name).put("iconId", icon).put("needsCustomization", false)
     }
     writeCatalog(items)
-  }
-  @Synchronized fun reportActivation(configJson: String) {
-    if (!foreground || torEnabled() || !activationEligible) return
-    val id = selected ?: return
-    val config = JSONObject(configJson)
-    if (!config.optBoolean("enabled", false) || prefs.getBoolean("activation-sent-$id", false)) return
-    val account = catalog().let { items ->
-      (0 until items.length()).map { items.getJSONObject(it) }.first { it.getString("id") == id }
-    }
-    if (!account.optBoolean("activationDisclosed", false) || account.optBoolean("needsCustomization", true)) return
-    val now = android.os.SystemClock.elapsedRealtime()
-    if (activationAttempts[id]?.let { now - it < 60000 } == true) return
-    activationAttempts[id] = now
-    runCatching {
-      val pending = prefs.getString("activation-pending-$id", null) ?: encryptActivationName(
-        names.decrypt(id, account.getString("encryptedName")), config.getString("recipientPublicKeyPem"),
-        config.getString("keyId"), UUID.randomUUID().toString()).toString().also {
-          check(prefs.edit().putString("activation-pending-$id", it).commit())
-        }
-      if (postActivation(config.getString("relayUrl"), pending)) {
-        check(prefs.edit().putBoolean("activation-sent-$id", true).remove("activation-pending-$id").commit())
-      }
-    }
   }
   @Synchronized fun remove(id: String) {
     if (selected == id) close()
@@ -308,7 +265,7 @@ internal class WalletEngine(private val context: Context) {
     // Remove files first; never claim deletion if the filesystem rejected it.
     root.listFiles()?.filter { it.name == id || it.name.startsWith("$id.") }?.forEach { check(it.delete()) }
     writeCatalog(remaining)
-    check(prefs.edit().remove("pw-$id").remove("broadcast-$id").remove("activation-pending-$id").remove("activation-sent-$id").commit())
+    check(prefs.edit().remove("pw-$id").remove("broadcast-$id").commit())
   }
   @Synchronized fun prepare(address: String, atomic: String): Map<String, Any> {
     check(pending == null) { "Discard the previous review before preparing another payment." }
@@ -363,7 +320,6 @@ internal class WalletEngine(private val context: Context) {
     }
   }
   @Synchronized fun close() {
-    activationEligible = false
     quote = null; pending = null; connected = false
     wallet?.let {
       api.MONERO_Wallet_pauseRefresh(it)
