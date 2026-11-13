@@ -123,16 +123,29 @@ class WalletEngineTest {
       assertEquals(16, phrase.split(" ").size)
       assertEquals(95, address.length)
       assertEquals(1, engine.list().size)
+      val recordFile = context.noBackupFilesDir.resolve("monero/$id.recovery/encrpyted_info")
+      val record = JSONObject(recordFile.readText(Charsets.UTF_8))
+      assertEquals(setOf("version", "encrypted", "seed"), record.keys().asSequence().toSet())
+      assertEquals(1, record.getInt("version"))
+      assertFalse(record.getBoolean("encrypted"))
+      assertTrue("Local recovery record must match the generated phrase", record.getString("seed") == phrase)
       assertFalse(engine.snapshot()["complete"] as Boolean)
       assertEquals("0", engine.snapshot()["available"])
       engine.close()
+      assertTrue(recordFile.isFile)
       assertEquals(address, engine.open(id)["address"])
       val sub = engine.subaddress()
       assertEquals(2, (sub["addresses"] as List<*>).size)
-      val restored = engine.create("Restore test", phrase, "0")
+      val restored = engine.create("Restore test", "  " + phrase.replace(" ", " \n ") + "  ", "0")
       assertEquals(address, restored["address"])
+      val restoredId = restored["id"] as String
+      val restoredFile = context.noBackupFilesDir.resolve("monero/$restoredId.recovery/encrpyted_info")
+      assertTrue("Restored record must contain the normalized phrase",
+        JSONObject(restoredFile.readText(Charsets.UTF_8)).getString("seed") == phrase)
+      assertEquals("", restored["seed"])
+      assertTrue("Creating another wallet must preserve earlier records", recordFile.isFile)
       // Check encrypted native storage without printing the phrase on failure.
-      context.noBackupFilesDir.resolve("monero").listFiles()?.forEach {
+      context.noBackupFilesDir.resolve("monero").listFiles()?.filter { it.isFile }?.forEach {
         assertFalse("Recovery phrase must not be plaintext in wallet files", it.readBytes().toString(Charsets.ISO_8859_1).contains(phrase))
       }
       var rejected = false
@@ -141,6 +154,26 @@ class WalletEngineTest {
       rejected = false
       try { engine.connect("http://example.com:38081") } catch (_: Exception) { rejected = true }
       assertTrue("Cleartext daemons must be rejected", rejected)
+      engine.remove(id)
+      assertFalse(recordFile.parentFile!!.exists())
+      assertTrue("Removing one wallet must preserve the other record", restoredFile.isFile)
+      engine.erase()
+      assertFalse(restoredFile.parentFile!!.exists())
+    } finally { engine.erase() }
+  }
+
+  @Test fun rejectedRestoreDoesNotLeaveRecoveryRecords() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val engine = WalletEngine(context)
+    engine.erase()
+    val root = context.noBackupFilesDir.resolve("monero")
+    try {
+      var rejected = false
+      try { engine.create("Invalid restore", List(25) { "not-a-monero-word" }.joinToString(" "), "0") }
+      catch (_: Exception) { rejected = true }
+      assertTrue("Native phrase validation must reject invalid recovery words", rejected)
+      assertTrue(engine.list().isEmpty())
+      assertTrue(root.listFiles().orEmpty().none { it.name.endsWith(".recovery") })
     } finally { engine.erase() }
   }
 }

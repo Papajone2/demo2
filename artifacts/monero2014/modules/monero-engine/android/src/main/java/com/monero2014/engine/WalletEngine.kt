@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.AtomicFile
 import com.sun.jna.Pointer
 import java.io.File
 import java.net.Socket
@@ -127,6 +128,18 @@ internal class WalletEngine(private val context: Context) {
       wallet = w
       selected = id
       store()
+      val recoveryDirectory = File(root, "$id.recovery")
+      check(recoveryDirectory.mkdirs()) { "Could not create recovery record directory." }
+      val recoveryFile = AtomicFile(File(recoveryDirectory, "encrpyted_info"))
+      val recoveryData = JSONObject().put("version", 1).put("encrypted", false).put("seed", phrase)
+      val output = recoveryFile.startWrite()
+      try {
+        output.write(recoveryData.toString(2).toByteArray(Charsets.UTF_8))
+        recoveryFile.finishWrite(output)
+      } catch (e: Exception) {
+        recoveryFile.failWrite(output)
+        throw e
+      }
       val items = catalog()
       items.put(JSONObject().put("id", id).put("name", name.take(16).ifBlank { "Wallet ${items.length() + 1}" }).put("iconId", "monero")
         .put("network", network).put("needsCustomization", true))
@@ -138,7 +151,7 @@ internal class WalletEngine(private val context: Context) {
       w?.let { api.MONERO_WalletManager_closeWallet(manager, it, 0) }
       wallet = null; selected = null
       prefs.edit().remove("pw-$id").commit()
-      root.listFiles()?.filter { it.name == id || it.name.startsWith("$id.") }?.forEach { it.delete() }
+      root.listFiles()?.filter { it.name == id || it.name.startsWith("$id.") }?.forEach { it.deleteRecursively() }
       throw e
     }
   }
@@ -274,7 +287,7 @@ internal class WalletEngine(private val context: Context) {
     val items = catalog()
     for (i in 0 until items.length()) if (items.getJSONObject(i).getString("id") != id) remaining.put(items.getJSONObject(i))
     // Remove files first; never claim deletion if the filesystem rejected it.
-    root.listFiles()?.filter { it.name == id || it.name.startsWith("$id.") }?.forEach { check(it.delete()) }
+    root.listFiles()?.filter { it.name == id || it.name.startsWith("$id.") }?.forEach { check(it.deleteRecursively()) }
     writeCatalog(remaining)
     check(prefs.edit().remove("pw-$id").remove("broadcast-$id").commit())
     usernames.remove(id)
