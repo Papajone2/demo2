@@ -1,5 +1,6 @@
 import { Feather } from '@expo/vector-icons';
-import { getGetMoneroHistoryQueryKey, getGetMoneroStatsQueryKey, useGetMoneroHistory, useGetMoneroStats, type GetMoneroHistoryCurrency, type MoneroHistoryPoint } from '@workspace/api-client-react';
+import { getGetMoneroHistoryQueryKey, getGetMoneroStatsQueryKey, type GetMoneroHistoryCurrency, type MoneroHistoryPoint } from '@workspace/api-client-react';
+import { useMarketHistory as useGetMoneroHistory, useMarketStats as useGetMoneroStats } from '@/hooks/useMarketData';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -18,7 +19,7 @@ const RANGES = [
   { k: '1y', label: '1Y', desc: msg('past year') },
 ] as const;
 type RangeKey = typeof RANGES[number]['k'];
-const MARKET: Record<string, GetMoneroHistoryCurrency> = { USD: 'usd', EUR: 'eur', GBP: 'gbp' };
+const MARKET: Record<string, GetMoneroHistoryCurrency> = { USD: 'usd', EUR: 'eur', GBP: 'gbp', INR: 'inr', CHF: 'chf' };
 const RED = '#ff3355';
 const GREEN = '#06e151';
 
@@ -129,6 +130,7 @@ export default function MarketScreen() {
         })}
       </View>
       {m?.stale ? <Text testID="market-delayed" style={{ fontFamily: F.r, fontSize: 11.5, color: c.mutedForeground, textAlign: 'center', marginTop: 14 }}>{t('Delayed market data')}</Text> : null}
+      {m ? <Text style={{ fontFamily: F.r, fontSize: 11.5, color: c.mutedForeground, textAlign: 'center', marginTop: 8 }}>Source: {m.source}</Text> : null}
       {mc ? <MarketStats data={stats.data && !stats.isError ? stats.data : null} loading={stats.isLoading} sym={sym} /> : null}
       </ScrollView>
     </Animated.View>

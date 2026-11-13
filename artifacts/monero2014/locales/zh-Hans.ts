@@ -379,4 +379,5 @@ const m: Record<string, string> = {
   "{a} of {b}": "{a}/{b}",
   "{n} words": "{n} 个词",
 };
-export default m;
+import { withWalletUpdates } from './wallet-update.ts';
+export default withWalletUpdates('zh-Hans', m);

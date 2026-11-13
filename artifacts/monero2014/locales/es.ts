@@ -379,4 +379,5 @@ const m: Record<string, string> = {
   "{a} of {b}": "{a} de {b}",
   "{n} words": "{n} palabras",
 };
-export default m;
+import { withWalletUpdates } from './wallet-update.ts';
+export default withWalletUpdates('es', m);

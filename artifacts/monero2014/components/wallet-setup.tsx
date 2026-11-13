@@ -7,6 +7,11 @@ import { accent } from '@/components/language-picker';
 import { Check, DEMO_TOKENS, Group, PillBtn, Row, sampleTokens, SampleTag, SetupPage, st, SURFACE, SURFACE_HI } from '@/components/setup-parts';
 import { msg, useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
+import { IS_NATIVE_ANDROID, nativeEngine } from '@/lib/native-engine';
+import { approximateChainHeight, estimatedRestoreHeight } from '@/lib/restore-policy';
+import { validMnemonicWord } from '@/lib/mnemonic-validation';
+import AppStorage from '@/lib/app-storage';
+import { durationRange, planningRange, SYNC_CALIBRATION_KEY } from '@/lib/sync-estimate';
 
 type Step = 'choice' | 'warn' | 'phrase' | 'restore';
 export type SetupPath = 'create' | 'restore';
@@ -15,8 +20,28 @@ export type SetupPath = 'create' | 'restore';
  * Front-end-only wallet setup preview. Nothing here is stored, logged or sent;
  * all state lives in this component and is dropped on unmount or path switch.
  */
-export function WalletSetup({ onBack, onReady }: { onBack: () => void; onReady: (p: SetupPath) => void }) {
+export function WalletSetup(props: { onBack: () => void; onReady: (p: SetupPath) => void }) {
+  return <PreviewWalletSetup {...props} />;
+}
+function PreviewWalletSetup({ onBack, onReady }: { onBack: () => void; onReady: (p: SetupPath) => void }) {
+  const { errorMessage } = useLanguage();
   const [step, setStep] = useState<Step>('choice');
+  const [network, setNetwork] = useState<0 | 2>(0);
+  const [nativeWords, setNativeWords] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const working = useRef(false);
+  const generate = async () => {
+    if (!IS_NATIVE_ANDROID) { go('phrase'); return; }
+    if (nativeWords.length) { go('phrase'); return; }
+    if (working.current) return;
+    working.current = true; setBusy(true); setError('');
+    try {
+      const created = await nativeEngine().create('', '', '0', network);
+      setNativeWords(created.seed.split(' ')); go('phrase');
+    } catch (e) { setError(errorMessage(e instanceof Error ? e.message : 'Wallet creation failed.')); }
+    finally { working.current = false; setBusy(false); }
+  };
   const [nonce, setNonce] = useState(0); // remounts steps so ephemeral state is discarded
   const go = (s: Step) => { if (s === 'choice') setNonce((n) => n + 1); setStep(s); };
   const back = () => {
@@ -31,13 +56,13 @@ export function WalletSetup({ onBack, onReady }: { onBack: () => void; onReady: 
     return () => sub.remove();
   }, []);
 
-  if (step === 'choice') return <Choice onBack={back} onPick={(p) => go(p === 'create' ? 'warn' : 'restore')} />;
-  if (step === 'warn') return <Warn key={nonce} onBack={back} onNext={() => go('phrase')} />;
-  if (step === 'phrase') return <Phrase key={nonce} onBack={back} onNext={() => onReady('create')} />;
-  return <Restore key={nonce} onBack={back} onDone={() => onReady('restore')} />;
+  if (step === 'choice') return <Choice onBack={back} onPick={(p) => go(p === 'create' ? 'warn' : 'restore')} network={network} onNetwork={setNetwork} />;
+  if (step === 'warn') return <Warn key={nonce} onBack={busy ? () => {} : back} onNext={generate} busy={busy} error={error} mainnet={IS_NATIVE_ANDROID && network === 0} />;
+  if (step === 'phrase') return <Phrase key={nonce} onBack={back} tokens={IS_NATIVE_ANDROID ? nativeWords : undefined} onNext={() => { setNativeWords([]); onReady('create'); }} />;
+  return <Restore key={nonce} onBack={back} onDone={() => onReady('restore')} onRestore={IS_NATIVE_ANDROID ? async (seed, height) => { await nativeEngine().create('', seed, height || '0', network); } : undefined} />;
 }
 
-function Choice({ onBack, onPick }: { onBack: () => void; onPick: (p: SetupPath) => void }) {
+function Choice({ onBack, onPick, network, onNetwork }: { onBack: () => void; onPick: (p: SetupPath) => void; network: 0 | 2; onNetwork: (n: 0 | 2) => void }) {
   const c = useColors();
   const ins = useInsets();
   const { t } = useLanguage();
@@ -64,25 +89,27 @@ function Choice({ onBack, onPick }: { onBack: () => void; onPick: (p: SetupPath)
   );
 }
 
-function Warn({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+function Warn({ onBack, onNext, busy = false, error = '', mainnet = false }: { onBack: () => void; onNext: () => void; busy?: boolean; error?: string; mainnet?: boolean }) {
   const [ack, setAck] = useState(false);
   const { t } = useLanguage();
   return (
     <SetupPage testID="setup-warn" step={t('Create · 1 of 2')} onBack={onBack} title={t('Keep your phrase private')} sub={t('It is the only way back into your wallet.')}
       footer={<>
         <Check testID="setup-warn-ack" checked={ack} onToggle={() => setAck((v) => !v)} label={t('I understand losing it means losing access.')} />
-        <PillBtn testID="setup-warn-next" label={t('Continue')} disabled={!ack} onPress={onNext} />
+        <PillBtn testID="setup-warn-next" label={busy ? t('Creating wallet…') : t('Continue')} disabled={!ack || busy} onPress={onNext} />
       </>}>
       <Group>
         <Row icon="edit-3" title={t('Write it on paper')} body={t('Keep it offline, somewhere only you can reach.')} />
         <Row icon="eye-off" title={t('Never share it')} body={t('Anyone with it can take your funds.')} />
         <Row icon="lock" title={t('No one can reset it')} body={t('Not monero2014, not support, not anyone.')} last />
       </Group>
+      {error ? <Text style={{ color: '#ff3355' }}>{error}</Text> : null}
     </SetupPage>
   );
 }
 
-function Phrase({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+function Phrase({ onBack, onNext, tokens }: { onBack: () => void; onNext: () => void; tokens?: string[] }) {
+  const entries = tokens ?? DEMO_TOKENS;
   const c = useColors();
   const { height, fontScale } = useWindowDimensions();
   const [shown, setShown] = useState(false);
@@ -95,7 +122,14 @@ function Phrase({ onBack, onNext }: { onBack: () => void; onNext: () => void }) 
   const fs = Math.min(14.5, Math.max(12.5, cellH * 0.42));
   const copy = async () => {
     if (!shown) return;
-    try { await Clipboard.setStringAsync(DEMO_TOKENS.join(' ')); tap('success'); setCopyErr(false); setCopied(true); setTimeout(() => setCopied(false), 1500); }
+    try {
+      const text = entries.join(' ');
+      if (tokens && IS_NATIVE_ANDROID) await nativeEngine().copyPrivateText(text);
+      else await Clipboard.setStringAsync(text);
+      tap('success'); setCopyErr(false); setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+      if (tokens && !IS_NATIVE_ANDROID) setTimeout(() => { void Clipboard.getStringAsync().then(current => current === text ? Clipboard.setStringAsync('') : undefined).catch(() => undefined); }, 60000);
+    }
     catch { setCopyErr(true); }
   };
   return (
@@ -104,16 +138,16 @@ function Phrase({ onBack, onNext }: { onBack: () => void; onNext: () => void }) 
         <Check testID="seed-backed-up" checked={done} disabled={!shown} onToggle={() => setDone((v) => !v)} label={t('I have written down all 16 entries.')} />
         <PillBtn testID="setup-phrase-next" label={t('Continue')} disabled={!shown || !done} onPress={onNext} />
       </>}>
-      <SampleTag right={shown ? (
+      <SampleTag text={tokens ? t('Private recovery phrase · write it offline') : undefined} right={shown ? (
         <Pressable testID="seed-hide" accessibilityRole="button" onPress={() => { tap(); setShown(false); }} hitSlop={10} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
           <Feather name="eye-off" size={14} color={c.primary} />
           <Text style={{ fontFamily: F.s, fontSize: 13, color: c.primary }}>{t('Hide')}</Text>
         </Pressable>
       ) : null} />
       <View>
-        <View style={st.grid} accessibilityLabel={shown ? t('Sample tokens, not a recovery phrase') : t('Hidden sample tokens')}>
-          {DEMO_TOKENS.map((t, i) => (
-            <View key={t} testID={`seed-cell-${i + 1}`} style={[st.cell, { height: cellH }]}>
+        <View style={st.grid} accessibilityLabel={tokens ? t('Recovery phrase') : shown ? t('Sample tokens, not a recovery phrase') : t('Hidden sample tokens')}>
+          {entries.map((t, i) => (
+            <View key={i} testID={`seed-cell-${i + 1}`} style={[st.cell, { height: cellH }]}>
               <Text style={[st.num, { color: '#6E6E73' }]}>{i + 1}</Text>
               <Text numberOfLines={1} style={[st.token, { fontSize: fs, color: shown ? c.inkForeground : '#3E3E42' }]}>{shown ? t : '\u2022\u2022\u2022\u2022\u2022\u2022'}</Text>
             </View>
@@ -121,7 +155,7 @@ function Phrase({ onBack, onNext }: { onBack: () => void; onNext: () => void }) 
         </View>
         {!shown ? (
           <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-            <Pressable testID="seed-reveal" accessibilityRole="button" accessibilityLabel={t('Reveal sample tokens')} onPress={() => { tap('medium'); setShown(true); }}
+            <Pressable testID="seed-reveal" accessibilityRole="button" accessibilityLabel={tokens ? t('Recovery phrase') : t('Reveal sample tokens')} onPress={() => { tap('medium'); setShown(true); }}
               style={({ pressed }) => [cs.reveal, { backgroundColor: pressed ? '#2A2A2D' : '#232326' }]}>
               <Feather name="eye" size={17} color={c.primary} />
               <Text style={{ fontFamily: F.s, fontSize: 15, color: c.inkForeground }}>{t('Tap to reveal')}</Text>
@@ -129,24 +163,41 @@ function Phrase({ onBack, onNext }: { onBack: () => void; onNext: () => void }) 
           </View>
         ) : null}
       </View>
-      <Pressable testID="seed-copy" accessibilityRole="button" accessibilityLabel={t('Copy sample tokens')} accessibilityState={{ disabled: !shown }} disabled={!shown} onPress={copy} hitSlop={8}
+      <Pressable testID="seed-copy" accessibilityRole="button" accessibilityLabel={t('Copy')} accessibilityState={{ disabled: !shown }} disabled={!shown} onPress={copy} hitSlop={8}
         style={({ pressed }) => [cs.copy, { opacity: !shown ? 0.35 : pressed ? 0.6 : 1 }]}>
         <Feather name={copied ? 'check' : 'copy'} size={14} color={c.inkForeground} />
         <Text style={{ fontFamily: F.s, fontSize: 13.5, color: c.inkForeground }}>{copyErr ? t('Clipboard unavailable on this device.') : copied ? t('Copied') : t('Copy')}</Text>
       </Pressable>
+      {tokens ? <Text style={{ color: c.inkMuted, fontFamily: F.r, fontSize: 12, textAlign: 'center' }}>{t('Clipboard contents may be visible to other apps. Prefer an offline backup. Copied words are cleared after one minute if unchanged.')}</Text> : null}
     </SetupPage>
   );
 }
 
 const REJECT = msg('Use the sample phrase in this preview. Real recovery needs the native Monero engine.');
 
-function Restore({ onBack, onDone }: { onBack: () => void; onDone: () => void }) {
+function Restore({ onBack, onDone, onRestore }: { onBack: () => void; onDone: () => void; onRestore?: (seed: string, height: string) => Promise<void> }) {
   const c = useColors();
-  const { t } = useLanguage();
+  const { t, errorMessage } = useLanguage();
   const [count, setCount] = useState<16 | 25>(16);
   const [words, setWords] = useState<string[]>(() => Array(16).fill(''));
   const [height, setHeight] = useState('');
+  const [dateStep, setDateStep] = useState(false);
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
+  const [measuredRate, setMeasuredRate] = useState<number>();
+  useEffect(() => {
+    let live = true;
+    void AppStorage.getItem(SYNC_CALIBRATION_KEY).then(raw => {
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (live && Number.isFinite(data.rate) && data.rate > 0 && data.at <= Date.now() && Date.now() - data.at < 7 * 86400000) setMeasuredRate(data.rate);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, []);
+  const [touched, setTouched] = useState<Set<number>>(new Set());
   const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const inflight = useRef(false);
   const [focus, setFocus] = useState(-1);
   const refs = useRef<(React.ElementRef<typeof TextInput> | null)[]>([]);
   const filled = words.filter((w) => w.trim()).length;
@@ -162,18 +213,47 @@ function Restore({ onBack, onDone }: { onBack: () => void; onDone: () => void })
     }
     setWords((a) => a.map((w, j) => (j === i ? v.replace(/\s/g, '') : w)));
   };
-  const submit = () => {
+  const submit = async () => {
+    if (inflight.current) return;
     if (heightBad) { tap('error'); setErr(t('Restore height must be a whole number (0 or more).')); return; }
+    if (!height && !dateStep) { setHeight(String(estimatedRestoreHeight(year, month))); setDateStep(true); return; }
+    if (onRestore) {
+      inflight.current = true; setBusy(true); setErr(null);
+      try { await onRestore(words.map(w => w.trim()).join(' '), height || '0'); setWords(Array(count).fill('')); onDone(); }
+      catch (e) { setErr(errorMessage(e instanceof Error ? e.message : 'Could not restore wallet.')); }
+      finally { inflight.current = false; setBusy(false); }
+      return;
+    }
     const sample = sampleTokens(count);
     if (words.every((w, i) => w.trim().toLowerCase() === sample[i])) { tap('success'); onDone(); return; }
     tap('error');
     setErr(t(REJECT));
   };
 
+  if (dateStep) return <SetupPage testID="restore-date" step={t('Restore')} title={t('When did you create this wallet?')} onBack={() => setDateStep(false)}
+    sub={t('Choose a month before your first payment. If unsure, choose the earliest year.')}
+    footer={<PillBtn testID="restore-date-next" label={busy ? t('Restoring…') : t('Continue')} disabled={busy} onPress={submit} />}>
+    <Text style={{ color: c.inkMuted }}>{t('Year')}</Text>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      {Array.from({ length: new Date().getFullYear() - 2013 }, (_, i) => new Date().getFullYear() - i).map(y => <Pressable key={y} testID={`restore-year-${y}`} onPress={() => { const m = y === new Date().getFullYear() ? Math.min(month, new Date().getMonth() + 1) : month; setYear(y); setMonth(m); setHeight(String(estimatedRestoreHeight(y, m))); }} style={{ padding: 10, borderRadius: 10, backgroundColor: year === y ? c.primary : SURFACE }}><Text style={{ color: c.inkForeground }}>{y}</Text></Pressable>)}
+    </View>
+    <Text style={{ color: c.inkMuted }}>{t('Month')}</Text>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <Pressable key={m} testID={`restore-month-${m}`} disabled={year === new Date().getFullYear() && m > new Date().getMonth() + 1} onPress={() => { setMonth(m); setHeight(String(estimatedRestoreHeight(year, m))); }} style={{ padding: 10, borderRadius: 10, opacity: year === new Date().getFullYear() && m > new Date().getMonth() + 1 ? 0.3 : 1, backgroundColor: month === m ? c.primary : SURFACE }}><Text style={{ color: c.inkForeground }}>{m}</Text></Pressable>)}
+    </View>
+    <Text style={{ color: c.inkForeground }}>{t('Estimated starting block')}: {height || '0'}</Text>
+    <View testID="restore-time-estimate" style={{ padding: 18, gap: 10, borderRadius: 18, backgroundColor: SURFACE }}>
+      <Text style={{ color: c.inkMuted }}>{t('Estimated sync time')}</Text>
+      <Text style={{ color: c.primary, fontFamily: F.b, fontSize: 24 }}>{(() => { const estimate = planningRange(approximateChainHeight() - Number(height || 0), measuredRate); return durationRange(estimate.low, estimate.high, t); })()}</Text>
+      <Text style={{ color: c.inkMuted }}>{measuredRate ? t('Based on previous scans on this device.') : t('Broad estimate until this device measures scan speed.')}</Text>
+      <Text style={{ color: c.inkMuted, lineHeight: 20 }}>{t('Scan time varies with your device, node and block activity. Older restores can take hours; this is a planning range, not a guarantee.')}</Text>
+    </View>
+    {err ? <Text style={{ color: c.destructive }}>{t(err)}</Text> : null}
+  </SetupPage>;
   return (
     <SetupPage testID="setup-restore-form" step={t('Restore')} onBack={onBack} title={t('Enter recovery phrase')} sub={t('Type or paste all {n} entries in order.', { n: count })}
-      footer={<PillBtn testID="restore-submit" label={t('Continue')} disabled={filled < count || heightBad} onPress={submit} />}>
-      <SampleTag text={t('Preview accepts the sample phrase only')} />
+      footer={<PillBtn testID="restore-submit" label={busy ? t('Restoring…') : t('Continue')} disabled={filled < count || heightBad || busy} onPress={submit} />}>
+      <SampleTag text={onRestore ? t('Restored locally on this device. Never share your phrase.') : t('Preview accepts the sample phrase only')} />
       <View style={cs.seg} accessibilityRole="radiogroup">
         {([16, 25] as const).map((n) => {
           const on = n === count;
@@ -193,14 +273,14 @@ function Restore({ onBack, onDone }: { onBack: () => void; onDone: () => void })
               <Text style={{ fontFamily: F.s, fontSize: 14, color: c.inkMuted }}>{t('Clear')}</Text>
             </Pressable>
           ) : null}
-          <Pressable testID="restore-sample" accessibilityRole="button" onPress={() => { tap(); setErr(null); setWords(sampleTokens(count)); }} style={{ padding: 8 }}>
+          {!onRestore ? <Pressable testID="restore-sample" accessibilityRole="button" onPress={() => { tap(); setErr(null); setWords(sampleTokens(count)); }} style={{ padding: 8 }}>
             <Text style={{ fontFamily: F.s, fontSize: 14, color: c.primary }}>{t('Use sample phrase')}</Text>
-          </Pressable>
+          </Pressable> : null}
         </View>
       </View>
       <View style={st.grid}>
         {words.map((w, i) => (
-          <View key={`${count}-${i}`} style={[st.cell, { height: 40, borderWidth: 1.5, borderColor: focus === i ? c.primary : 'transparent' }]}>
+          <View key={`${count}-${i}`} style={[st.cell, { height: 48, borderWidth: 1.5, borderColor: onRestore && touched.has(i) && w && !validMnemonicWord(w, count) ? c.destructive : focus === i ? c.primary : 'transparent' }]}>
             <Text style={[st.num, { color: c.inkMuted }]}>{i + 1}</Text>
             <TextInput
               ref={(r) => { refs.current[i] = r; }}
@@ -208,8 +288,8 @@ function Restore({ onBack, onDone }: { onBack: () => void; onDone: () => void })
               accessibilityLabel={t('Entry {n}', { n: i + 1 })}
               value={w}
               onChangeText={(v) => set(i, v)}
-              onFocus={() => setFocus(i)}
-              onBlur={() => setFocus(-1)}
+              onFocus={() => { setFocus(i); setTouched(current => { const next = new Set(current); next.delete(i); return next; }); }}
+              onBlur={() => { setFocus(-1); setTouched(current => new Set(current).add(i)); }}
               autoCapitalize="none"
               autoCorrect={false}
               autoComplete="off"
@@ -224,6 +304,7 @@ function Restore({ onBack, onDone }: { onBack: () => void; onDone: () => void })
           </View>
         ))}
       </View>
+      {onRestore && words.some((w, i) => touched.has(i) && w && !validMnemonicWord(w, count)) ? <Text style={{ color: c.destructive }}>{t('Invalid word. Check the highlighted entries.')}</Text> : null}
       <View style={[cs.heightBox, { borderColor: focus === 99 ? c.primary : heightBad ? c.primary : 'transparent' }]}>
         <Text style={{ fontFamily: F.m, fontSize: 12.5, color: '#8E8E93' }}>{t('Restore height (optional)')}</Text>
         <TextInput testID="restore-height" accessibilityLabel={t('Restore height (optional)')} value={height}

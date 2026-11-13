@@ -1,0 +1,5 @@
+{
+  "enabled": false,
+  "public_key_file": "username-public.pem",
+  "receiver_url": ""
+}

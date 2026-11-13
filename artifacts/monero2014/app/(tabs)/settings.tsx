@@ -1,12 +1,13 @@
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { GRow, Group, Notice, TopBar } from '@/components/account-ui';
 import { LanguageList } from '@/components/language-picker';
-import { SITE } from '@/components/LockGate';
+import { WEBSITE_LINKS } from '@/lib/external-links';
 import { Btn, F, tap, useInsets, WalletGate } from '@/components/ui';
 import { WalletAvatar } from '@/components/wallet-avatar';
 import { useLanguage } from '@/context/LanguageContext';
@@ -15,8 +16,11 @@ import { useWallet } from '@/context/WalletContext';
 import { useColors } from '@/hooks/useColors';
 import { resetTutorial } from '@/lib/tutorial';
 import { centsToString, CURRENCIES, parseRateCents } from '@/lib/money';
+import { NodeSettings } from '@/components/node-settings';
+import { DestructionSettings } from '@/components/destruction-settings';
+import { ExchangeGuide } from '@/components/exchange-guide';
 
-type Panel = 'main' | 'prefs' | 'security' | 'tor' | 'language';
+type Panel = 'main' | 'prefs' | 'security' | 'tor' | 'language' | 'destruction' | 'exchanges';
 const open = (url: string) => WebBrowser.openBrowserAsync(url).catch(() => {});
 const leave = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
@@ -76,36 +80,28 @@ function Prefs() {
           <Switch testID="hide-switch" value={state.hideBalance} onValueChange={(v) => updatePrefs({ hideBalance: v }).catch(() => setErr(t('Could not save.')))} trackColor={{ true: c.mutedForeground, false: c.input }} thumbColor={c.foreground} />
         </View>
       </Group>
-      <Caption>{t('Test reference rate per XMR')}</Caption>
-      <Group>
-        <View style={[st.row, { paddingVertical: 4 }]}>
-          <TextInput testID="rate-input" value={rate} onChangeText={setRate} keyboardType="decimal-pad" placeholder={t('Leave empty to hide fiat')} placeholderTextColor={c.mutedForeground}
-            style={{ flex: 1, fontFamily: F.m, fontSize: 16, color: c.foreground, paddingVertical: 10 }} />
-          <Text style={{ fontFamily: F.m, fontSize: 14, color: c.mutedForeground }}>{state.currency}</Text>
-        </View>
-      </Group>
-      <Text style={{ fontFamily: F.r, fontSize: 12.5, lineHeight: 17, color: c.mutedForeground, marginTop: -8 }}>{t('Used by test screens. You choose this number; it is never a live price.')}</Text>
       {err ? <Text style={{ fontFamily: F.m, color: c.destructive }}>{err}</Text> : null}
-      <Btn testID="save-settings" variant="soft" label={saved ? t('Saved') : t('Save')} icon={saved ? 'check' : undefined} onPress={save} />
     </Scroll>
   );
 }
 
-function Security({ onTor }: { onTor: () => void }) {
+function Security({ onTor, onDestruction }: { onTor: () => void; onDestruction: () => void }) {
   const lock = useLock();
+  const c = useColors();
   const { t } = useLanguage();
+  const [error, setError] = useState('');
   return (
     <Scroll>
       <Group>
-        <GRow icon="lock" title={lock.method === 'password' ? t('Unlock with password') : t('Unlock with {n}-digit PIN', { n: lock.pinLength })} sub={t('Locks when the app goes to background.')} />
+        <GRow icon="lock" title={lock.method === 'password' ? t('Unlock with password') : t('Unlock with {n}-digit PIN', { n: lock.pinLength })} />
         <GRow testID="change-secret" icon="refresh-cw" title={t('Change PIN or password')} onPress={lock.startChange} />
-        <GRow testID="security-tor" icon="eye-off" title={t('Tor')} value={t('Unavailable')} onPress={onTor} />
+        <View style={st.row}><Text style={{ flex: 1, color: c.foreground }}>{t('Lock after 5 minutes of inactivity')}</Text><Switch value={lock.autoLock} onValueChange={value => { void lock.setAutoLock(value).catch(() => setError(t('Could not save.'))); }} /></View>
+        <GRow testID="security-tor" icon="eye-off" title={t('Nodes & Tor')} onPress={onTor} />
+        <GRow icon="trash-2" title={t('Destruction PIN or password')} value={lock.destructionEnabled ? t('On') : t('Off')} onPress={onDestruction} />
       </Group>
-      <Notice tone="info" icon="info" title={t('What the lock protects')} body={t('The app lock gates this preview and re-confirms deletes and secret screens. It does not encrypt wallet data, and a forgotten secret cannot be recovered.')} />
-      <Group>
-        <GRow icon="key" title={t('16-word Polyseed backup')} sub={t('Requires native engine — not generated')} onPress={() => router.push('/engine')} />
-        <GRow icon="cpu" title={t('Native Monero engine')} sub={t('Unavailable in this build')} onPress={() => router.push('/engine')} />
-      </Group>
+      <Text style={{ color: c.mutedForeground }}>{t('Inactivity includes time in the background. Turn this off to stay unlocked until the app process closes. Android may close background apps. Sync pauses in the background either way.')}</Text>
+      <Text style={{ color: c.mutedForeground }}>{t('Five incorrect attempts pause input for one minute, then five minutes after the next five, then one hour after another five. The cycle repeats. A correct unlock resets it.')}</Text>
+      {error ? <Text style={{ color: c.destructive }}>{error}</Text> : null}
     </Scroll>
   );
 }
@@ -135,7 +131,7 @@ function Language() {
   return <Scroll><LanguageList /></Scroll>;
 }
 
-const TITLES: Record<Panel, string> = { main: 'Settings', prefs: 'Preferences', security: 'Security & Privacy', tor: 'Tor', language: 'Language' };
+const TITLES: Record<Panel, string> = { main: 'Settings', prefs: 'Preferences', security: 'Security & Privacy', tor: 'Nodes & Tor', language: 'Language', destruction: 'Destruction PIN or password', exchanges: 'Monero exchanges' };
 
 function Settings() {
   const c = useColors();
@@ -143,7 +139,9 @@ function Settings() {
   const { t, languageName } = useLanguage();
   const { state } = useWallet();
   const lock = useLock();
-  const [panel, setPanel] = useState<Panel>('main');
+  const params = useLocalSearchParams<{ panel?: string; tour?: string }>();
+  const [panel, setPanel] = useState<Panel>(() => params.panel === 'exchanges' ? 'exchanges' : 'main');
+  useEffect(() => { if (params.panel === 'exchanges') setPanel('exchanges'); }, [params.panel]);
   const [q, setQ] = useState('');
   const [tourError, setTourError] = useState<string | null>(null);
   if (!state) return null;
@@ -151,8 +149,8 @@ function Settings() {
   if (panel !== 'main') {
     return (
       <View style={{ flex: 1, backgroundColor: c.background }}>
-        <TopBar title={t(TITLES[panel])} onBack={() => setPanel('main')} />
-        {panel === 'prefs' ? <Prefs /> : panel === 'security' ? <Security onTor={() => setPanel('tor')} /> : panel === 'language' ? <Language /> : <Tor />}
+        <TopBar title={t(TITLES[panel])} onBack={() => params.tour === '1' ? leave() : setPanel('main')} />
+        {panel === 'prefs' ? <Prefs /> : panel === 'security' ? <Security onTor={() => setPanel('tor')} onDestruction={() => setPanel('destruction')} /> : panel === 'language' ? <Language /> : panel === 'destruction' ? <DestructionSettings /> : panel === 'exchanges' ? <Scroll><ExchangeGuide onContinue={params.tour === '1' ? leave : undefined} /></Scroll> : <NodeSettings />}
       </View>
     );
   }
@@ -165,16 +163,16 @@ function Settings() {
     ] },
     { key: 'wallet', rows: [
       { key: 'security', icon: 'shield', title: t('Security & Privacy'), go: () => setPanel('security') },
-      { key: 'tor', icon: 'eye-off', title: t('Tor'), value: t('Unavailable'), go: () => setPanel('tor') },
     ] },
     { key: 'help', rows: [
+      { key: 'exchanges', icon: 'repeat', title: t('Monero exchanges'), go: () => setPanel('exchanges') },
       { key: 'tutorial', icon: 'play-circle', title: t('Replay wallet tour'), go: async () => {
         setTourError(null);
         try { await resetTutorial(state.id); router.replace('/'); }
         catch { setTourError(t('Could not restart the tour. Please try again.')); }
       } },
-      { key: 'help', icon: 'help-circle', title: t('Help & Support'), external: true, go: () => open(SITE) },
-      { key: 'about', icon: 'info', title: t('About monero2014'), external: true, go: () => open(`${SITE}/about`) },
+      { key: 'help', icon: 'help-circle', title: t('Help & Support'), external: true, go: () => open(WEBSITE_LINKS.support) },
+      { key: 'about', icon: 'info', title: t('About monero2014'), external: true, go: () => open(WEBSITE_LINKS.about) },
     ] },
   ];
   const needle = q.trim().toLowerCase();

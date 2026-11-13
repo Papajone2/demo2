@@ -8,6 +8,7 @@ import { REQUIRED_CONFIRMATIONS, useWallet } from '@/context/WalletContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
 import { currencySymbol, fiatCents, formatFiat, formatXmr } from '@/lib/money';
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
 
 function Detail() {
   const c = useColors();
@@ -21,7 +22,7 @@ function Detail() {
     return (
       <View style={{ flex: 1, backgroundColor: c.background, justifyContent: 'center', padding: 24 }}>
         <Stack.Screen options={{ title: t('Transaction') }} />
-        <EmptyState icon="help-circle" title={t('Transaction not found')} body={t('It may have been removed by a sandbox reset.')} />
+        <EmptyState icon="help-circle" title={t('Transaction not found')} body={t('Try a different search or filter.')} />
         <Btn label={t('Back')} onPress={() => router.back()} />
       </View>
     );
@@ -32,12 +33,13 @@ function Detail() {
   const rows: [string, string][] = [
     [t('Status'), pending ? t('Pending · {a}/{b} confirmations', { a: tx.confirmations, b: REQUIRED_CONFIRMATIONS }) : t('Confirmed · {n}+ blocks', { n: tx.confirmations })],
     [t('Date'), new Date(tx.createdAt).toLocaleString()],
-    ...(!isIn ? [[t('To'), tx.address] as [string, string]] : []),
+    ...(!isIn && tx.address ? [[t('To'), tx.address] as [string, string]] : []),
     [t('Amount'), `${formatXmr(amt, 12)} XMR`],
     ...(!isIn ? ([[t('Network fee'), `${formatXmr(BigInt(tx.fee), 12)} XMR`]] as [string, string][]) : []),
-    ...(rate ? ([[t('Test valuation'), formatFiat(fiatCents(amt, rate), currencySymbol(state.currency))]] as [string, string][]) : []),
+    ...(rate ? ([[t('Equivalent'), formatFiat(fiatCents(amt, rate), currencySymbol(state.currency))]] as [string, string][]) : []),
     [t('Note'), tx.note || '—'],
-    [t('Sandbox ID'), tx.id],
+    [t('Transaction ID'), tx.id],
+    ...(pending ? [[t('Estimated time'), t('About {n} minutes', { n: Math.max(2, (REQUIRED_CONFIRMATIONS - tx.confirmations) * 2) })]] as [string, string][] : []),
   ];
   return (
     <ScrollView style={{ flex: 1, backgroundColor: c.background }} contentContainerStyle={{ padding: 18, paddingBottom: ins.bottom + 24, gap: 14 }}>
@@ -61,12 +63,12 @@ function Detail() {
         ))}
       </Card>
       <Btn
-        label={copied ? t('Copied') : isIn ? t('Copy transaction ID') : t('Copy test address')}
+        label={copied ? t('Copied') : t('Copy transaction ID')}
         icon={copied ? 'check' : 'copy'}
         variant="soft"
         onPress={async () => {
           try {
-            await Clipboard.setStringAsync(isIn ? tx.id : tx.address);
+            await Clipboard.setStringAsync(tx.id);
             tap('success');
             setCopied(true);
             setTimeout(() => setCopied(false), 1500);
@@ -75,8 +77,7 @@ function Detail() {
           }
         }}
       />
-      {pending ? <Btn label={t('Confirm in Testing hub')} icon="tool" variant="ghost" onPress={() => router.push('/test')} /> : null}
-      <Text style={[ui.hint, { color: c.mutedForeground, textAlign: 'center' }]}>{t('Sandbox record only. There is no on-chain transaction to look up.')}</Text>
+      {!IS_NATIVE_ANDROID ? <Text style={[ui.hint, { color: c.mutedForeground, textAlign: 'center' }]}>{t('Preview record only. No on-chain transaction exists.')}</Text> : pending ? <Text style={[ui.hint, { color: c.mutedForeground }]}>{t('Confirmation times are estimates, not guarantees. Funds are still syncing; wait until fully synced before sending.')}</Text> : null}
     </ScrollView>
   );
 }

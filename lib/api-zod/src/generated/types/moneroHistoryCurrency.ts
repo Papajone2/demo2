@@ -13,4 +13,6 @@ export const MoneroHistoryCurrency = {
   usd: 'usd',
   eur: 'eur',
   gbp: 'gbp',
+  inr: 'inr',
+  chf: 'chf',
 } as const;

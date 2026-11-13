@@ -28,7 +28,7 @@ function Activity() {
   const txs = state?.txs;
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return (txs ?? []).filter((t) => {
+    return [...(txs ?? [])].sort((a, b) => b.createdAt - a.createdAt).filter((t) => {
       if (f === 'in' && t.kind !== 'in') return false;
       if (f === 'out' && t.kind !== 'out') return false;
       if (f === 'pending' && t.confirmations >= REQUIRED_CONFIRMATIONS) return false;

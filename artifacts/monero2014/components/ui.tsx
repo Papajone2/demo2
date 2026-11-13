@@ -8,6 +8,7 @@ import { REQUIRED_CONFIRMATIONS, Tx, useWallet } from '@/context/WalletContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
 import { currencySymbol, fiatCents, formatFiat, formatXmr } from '@/lib/money';
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
 
 export const F = {
   r: 'Inter_400Regular',
@@ -31,16 +32,17 @@ export function tap(kind: 'light' | 'medium' | 'success' | 'error' = 'light') {
 
 export function TestBanner({ compact }: { compact?: boolean }) {
   const c = useColors();
+  const { state } = useWallet();
   const { t } = useLanguage();
+  if (IS_NATIVE_ANDROID && state?.network === 'mainnet') return null;
   return (
     <Pressable
       testID="test-banner"
-      onPress={() => router.push('/test')}
+      onPress={() => router.push(IS_NATIVE_ANDROID ? '/engine' : '/test')}
       style={({ pressed }) => [s.banner, { backgroundColor: c.warnBg, opacity: pressed ? 0.8 : 1 }, compact && { paddingVertical: 6 }]}
     >
       <View style={[s.bannerDot, { backgroundColor: c.warn }]} />
-      <Text style={[s.bannerText, { color: c.warn }]}>{t('Test wallet • No real XMR')}</Text>
-      {!compact && <Text style={[s.bannerSub, { color: c.warn }]}>{t('Sandbox')}</Text>}
+      <Text style={[s.bannerText, { color: c.warn }]}>{t('Preview only · no real XMR')}</Text>
     </Pressable>
   );
 }
@@ -149,7 +151,7 @@ export function WalletGate({ children }: { children: React.ReactNode }) {
           <Feather name="plus" size={28} color={c.primary} />
         </View>
         <Text style={[s.h2, { color: c.foreground }]}>{t('No wallet on this device')}</Text>
-        <Text style={[s.body, { color: c.mutedForeground }]}>{t('Every local test account was deleted. Create a new one to keep testing.')}</Text>
+        <Text style={[s.body, { color: c.mutedForeground }]}>{IS_NATIVE_ANDROID ? t('No accounts on this device') : t('Every local test account was deleted. Create a new one to keep testing.')}</Text>
         <Btn testID="empty-create-wallet" label={t('Create wallet')} icon="plus" onPress={() => router.push('/accounts')} />
       </View>
     );
@@ -160,7 +162,7 @@ export function WalletGate({ children }: { children: React.ReactNode }) {
         <Text style={[s.h2, { color: c.foreground }]}>{t('Local storage problem')}</Text>
         <Text style={[s.body, { color: c.mutedForeground }]}>{t(error ?? 'Wallet data is unavailable.')}</Text>
         <Btn label={t('Try again')} icon="refresh-cw" onPress={reload} />
-        <Btn label={t('Reset sandbox data')} variant="ghost" onPress={() => resetSandbox().catch(() => {})} />
+        {!IS_NATIVE_ANDROID ? <Btn label={t('Clear preview data')} variant="ghost" onPress={() => resetSandbox().catch(() => {})} /> : null}
       </View>
     );
   return <>{children}</>;

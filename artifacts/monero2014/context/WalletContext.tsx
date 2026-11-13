@@ -8,6 +8,7 @@ import {
   type AvatarId, type Tx, type WalletState, type WalletStore,
 } from '@/lib/wallet-model';
 import { useLock } from '@/context/LockContext';
+import { requireUnlockedSession } from '@/lib/session-policy';
 import { usePreviewSync } from '@/hooks/usePreviewSync';
 export { WALLET_STORAGE_KEY, REQUIRED_CONFIRMATIONS };
 export { balances } from '@/lib/wallet-model';
@@ -27,12 +28,12 @@ function newWallet(name: string, iconId: AvatarId, demo = false): WalletState {
     ] : [],
   };
 }
-type Ctx = {
+export type Ctx = {
   state: WalletState | null; wallets: WalletState[]; selectedId: string | null; nextWalletNumber: number;
   loading: boolean; error: string | null; reload: () => void;
   available: bigint; locked: bigint; total: bigint;
-  selectWallet: (id: string, secret: string, signal?: AbortSignal) => Promise<void>;
-  sync: { remainingSeconds: number; progress: number; complete: boolean };
+  selectWallet: (id: string, secret?: string, signal?: AbortSignal) => Promise<void>;
+  sync: { remainingSeconds: number; progress: number; complete: boolean; height?: number; target?: number; etaLow?: number; etaHigh?: number; etaState?: 'measuring' | 'tracking' | 'stalled' | 'complete' };
   createWallet: (name?: string, iconId?: AvatarId) => Promise<string>;
   updateWalletProfile: (id: string, profile: { name?: string; iconId?: AvatarId }) => Promise<void>;
   deleteWallet: (id: string, secret: string, signal?: AbortSignal) => Promise<void>;
@@ -51,7 +52,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const ref = useRef<WalletStore | null>(null);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const mounted = useRef(true);
-  const { authorize } = useLock();
+  const { authorize, status } = useLock();
+  const sessionStatus = useRef(status);
+  sessionStatus.current = status;
   const load = useCallback(() => {
     setLoading(true); setError(null);
     const run = queue.current.then(async () => {
@@ -105,13 +108,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const selectWallet = useCallback<Ctx['selectWallet']>(async (id, secret, signal) => {
     if (signal?.aborted) throw new Error('Switch cancelled.');
     if (!ref.current?.wallets.some(w => w.id === id)) throw new Error('Account not found.');
-    const auth = await authorize(secret);
-    if (!auth.ok) throw new Error(auth.message ?? 'Incorrect PIN or password.');
+    requireUnlockedSession(sessionStatus.current);
     await mutate(s => {
       if (signal?.aborted) throw new Error('Switch cancelled.');
+      requireUnlockedSession(sessionStatus.current);
       return { next: selectRecord(s, id), result: undefined };
     });
-  }, [authorize, mutate]);
+  }, [mutate]);
   const createWallet = useCallback((name?: string, iconId: AvatarId = 'monero') => mutate(s => {
     const label = validatedWalletName(name?.trim() || `Wallet ${s.nextWalletNumber}`);
     if (!isAvatarId(iconId)) throw new Error('Choose a valid name and icon.');
@@ -152,7 +155,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (amount <= BigInt(0)) throw new Error('Amount must be greater than zero.');
     const tx: Tx = { id: randomId(), kind: 'in', amount: amount.toString(), fee: '0',
       confirmations: pending ? 0 : REQUIRED_CONFIRMATIONS, address: newTestAddress(),
-      note: note ?? (pending ? 'Simulated incoming transfer' : 'Test funds added'), createdAt: Date.now() };
+      note: note ?? 'Preview only · no real XMR', createdAt: Date.now() };
     return { next: { ...s, txs: [tx, ...s.txs] }, result: undefined };
   }), [mutateSelected]);
   const advanceBlocks = useCallback<Ctx['advanceBlocks']>(n => mutateSelected(s => {

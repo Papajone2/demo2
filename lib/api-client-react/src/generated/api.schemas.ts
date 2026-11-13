@@ -32,6 +32,8 @@ export const MoneroHistoryCurrency = {
   usd: 'usd',
   eur: 'eur',
   gbp: 'gbp',
+  inr: 'inr',
+  chf: 'chf',
 } as const;
 
 export interface MoneroHistory {
@@ -86,6 +88,8 @@ export const GetMoneroStatsCurrency = {
   usd: 'usd',
   eur: 'eur',
   gbp: 'gbp',
+  inr: 'inr',
+  chf: 'chf',
 } as const;
 
 export type GetMoneroHistoryParams = {
@@ -100,6 +104,8 @@ export const GetMoneroHistoryCurrency = {
   usd: 'usd',
   eur: 'eur',
   gbp: 'gbp',
+  inr: 'inr',
+  chf: 'chf',
 } as const;
 
 export type GetMoneroHistoryRange = typeof GetMoneroHistoryRange[keyof typeof GetMoneroHistoryRange];
@@ -124,6 +130,8 @@ export const GetMoneroPriceCurrency = {
   usd: 'usd',
   eur: 'eur',
   gbp: 'gbp',
+  inr: 'inr',
+  chf: 'chf',
 } as const;
 
 export type GetMoneroNodeParams = {

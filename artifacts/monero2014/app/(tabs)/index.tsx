@@ -1,5 +1,7 @@
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
 import { Feather } from '@expo/vector-icons';
-import { getGetMoneroHistoryQueryKey, useGetMoneroHistory, type GetMoneroHistoryCurrency } from '@workspace/api-client-react';
+import { getGetMoneroHistoryQueryKey, type GetMoneroHistoryCurrency } from '@workspace/api-client-react';
+import { useMarketHistory as useGetMoneroHistory } from '@/hooks/useMarketData';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -7,17 +9,18 @@ import { Animated, type LayoutRectangle, Platform, Pressable, StyleSheet, Text, 
 import { MarketChart, MoneroLogo } from '@/components/market-chart';
 import { WalletAvatar } from '@/components/wallet-avatar';
 import { TOUR, TourError, TourOverlay, type TourTarget } from '@/components/wallet-tour';
-import { isTutorialDone, markTutorialDone } from '@/lib/tutorial';
+import { isTutorialDone, markTutorialDone, saveTutorialResume, tutorialResume } from '@/lib/tutorial';
 import { EmptyState, F, tap, TxRow, useInsets, WalletGate } from '@/components/ui';
 import { REQUIRED_CONFIRMATIONS, useWallet } from '@/context/WalletContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
-import { ATOMIC_PER_XMR, currencySymbol, formatXmr } from '@/lib/money';
+import { ATOMIC_PER_XMR, compactXmr, currencySymbol, formatXmr } from '@/lib/money';
+import { SyncDetails } from '@/components/sync-details';
 
 const BG = require('@/assets/images/monero-background.png');
-const DIM = 'rgba(128,128,128,0.5)';
+const DIM = 'rgba(0,0,0,0.55)';
 const HIDDEN = '••••';
-const MARKET: Record<string, GetMoneroHistoryCurrency> = { USD: 'usd', EUR: 'eur', GBP: 'gbp' };
+const MARKET: Record<string, GetMoneroHistoryCurrency> = { USD: 'usd', EUR: 'eur', GBP: 'gbp', INR: 'inr', CHF: 'chf' };
 
 function money(v: number, sym: string) {
   const sign = v < 0 ? '-' : '';
@@ -54,13 +57,13 @@ function Overview() {
   useFocusEffect(useCallback(() => {
     if (!wid || !ready) return undefined;
     let live = true;
-    isTutorialDone(wid).then((d) => { if (live) { setStep(0); setTour(d ? 'idle' : 'show'); } }).catch(() => { if (live) setTour('error'); });
+    Promise.all([isTutorialDone(wid), tutorialResume(wid)]).then(([d, resume]) => { if (live) { setStep(d ? 0 : Math.min(resume, TOUR.length - 1)); setTour(d ? 'idle' : 'show'); } }).catch(() => { if (live) setTour('error'); });
     return () => { live = false; setTour('idle'); setStep(0); setTourErr(null); };
   }, [wid, ready, check]));
   const target: TourTarget | null = tour === 'show' ? TOUR[step].target : null;
   // Target rect in content coords, then the scroll offset that keeps it above the bottom-anchored card.
   const content = (() => {
-    if (!target) return null;
+    if (!target || target === 'exchanges') return null;
     const A = lay.actions;
     const n = target === 'sync' ? lay.sync : lay[target];
     if (!n || (target !== 'sync' && !A)) return null;
@@ -99,10 +102,11 @@ function Overview() {
   if (!state) return null;
   const sym = currencySymbol(state.currency);
   const hide = state.hideBalance;
-  const recent = state.txs.slice(0, 3);
+  const recent = [...state.txs].sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
+  const pendingIncoming = state.txs.filter(tx => tx.kind === 'in' && tx.confirmations < REQUIRED_CONFIRMATIONS).reduce((sum, tx) => sum + BigInt(tx.amount), 0n);
   const qty = Number(available) / Number(ATOMIC_PER_XMR);
   const m = mc && market.data && !market.isError ? market.data : null;
-  const fiat = m ? money(qty * m.price, sym) : null;
+  const fiat = qty === 0 ? money(0, sym) : m ? money(qty * m.price, sym) : null;
   const valueChange = m ? qty * m.changeAbsolute : 0;
   const up = (m?.changePercent ?? 0) >= 0;
   const tone = up ? c.success : c.loss;
@@ -134,8 +138,7 @@ function Overview() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Feather name={sync.complete ? 'check-circle' : 'refresh-cw'} size={16} color={sync.complete ? c.success : c.primary} />
             <Text style={{ fontFamily: F.s, fontSize: 16, color: c.foreground, flex: 1 }}>{sync.complete ? t('Synced') : t('Syncing')}</Text>
-            <Text testID="sync-status" style={[st.num, { fontSize: 13, color: c.mutedForeground }]}>{sync.complete ? '100%' : `${Math.round(sync.progress * 100)}% \u00b7 ~${sync.remainingSeconds}s`}</Text>
-            <View style={[st.tag, { backgroundColor: c.secondary }]}><Text style={{ fontFamily: F.s, fontSize: 11, color: c.mutedForeground }}>{t('Preview')}</Text></View>
+            <Text testID="sync-status" style={[st.num, { fontSize: 13, color: c.mutedForeground }]}>{sync.complete ? '100%' : IS_NATIVE_ANDROID ? `${Math.round(sync.progress * 100)}%` : `${Math.round(sync.progress * 100)}% \u00b7 ~${sync.remainingSeconds}s`}</Text>
           </View>
           <View style={[st.track, { backgroundColor: c.secondary }]} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(sync.progress * 100) }}>
             <View style={{ width: `${Math.min(100, sync.progress * 100)}%`, height: '100%', borderRadius: 3, backgroundColor: sync.complete ? c.success : c.primary }} />
@@ -157,7 +160,7 @@ function Overview() {
   );
 
   return (
-    <View onLayout={(e) => setRootH(e.nativeEvent.layout.height)} style={{ flex: 1, backgroundColor: c.background }}>
+    <View onLayout={(e) => setRootH(e.nativeEvent.layout.height)} style={{ flex: 1, backgroundColor: '#000000' }}>
       <Animated.ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
@@ -166,7 +169,6 @@ function Overview() {
         {/* Wallpaper is part of the scrolling content, so it moves up together with it. */}
         <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: winH }}>
           <Image source={BG} style={StyleSheet.absoluteFill} contentFit="cover" />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: c.foreground, opacity: 0.06 }]} />
         </View>
         <View style={st.top}>
           <Pressable testID="home-avatar" accessibilityLabel={t('Accounts')} onPress={() => { tap(); router.push('/accounts'); }} hitSlop={6}>
@@ -187,12 +189,12 @@ function Overview() {
               <View style={[st.skel, { width: 230, height: 54, backgroundColor: c.charcoal }]} />
             ) : (
               <Text testID="fiat-total" adjustsFontSizeToFit numberOfLines={1} style={[st.fiat, st.shadow, { color: c.foreground }]}>
-                {hide ? `${sym}${HIDDEN}` : fiat ?? `${formatXmr(available, 4)} XMR`}
+                {hide ? `${sym}${HIDDEN}` : !sync.complete ? t('Pending') : fiat ?? `${sym}—`}
               </Text>
             )}
             {hide ? (
               <Text style={[st.gainTxt, st.shadow, { color: c.mutedForeground, marginTop: 10 }]}>{HIDDEN}</Text>
-            ) : m ? (
+            ) : m && sync.complete ? (
               <View style={st.gainRow}>
                 <Feather name={up ? 'trending-up' : 'trending-down'} size={16} color={tone} />
                 <Text style={[st.gainTxt, st.shadow, { color: tone }]}>{signed(valueChange, sym)}</Text>
@@ -206,6 +208,7 @@ function Overview() {
           </Pressable>
         </Animated.View>
 
+        {!hide && sync.complete && pendingIncoming > 0n ? <Text style={{ textAlign: 'center', color: c.primary, fontFamily: F.m, marginBottom: 12 }}>+{compactXmr(pendingIncoming, state.rateCents ? BigInt(state.rateCents) : null)} XMR · {t('Pending')}</Text> : null}
         <View style={[st.actions, actionsUp && st.raised]} onLayout={setL('actions')}>
           <View onLayout={setL('send')} style={st.actionWrap}>
           {sendBtn()}
@@ -225,8 +228,8 @@ function Overview() {
               <Text style={{ fontFamily: F.r, fontSize: 13.5, color: c.mutedForeground }}>XMR</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[st.num, { fontSize: 17, color: c.foreground }]}>{hide ? HIDDEN : formatXmr(available, 4, 4)}</Text>
-              <Text style={[st.num, { fontSize: 13.5, color: c.mutedForeground }]}>{hide ? HIDDEN : fiat ?? '—'}</Text>
+              <Text style={[st.num, { fontSize: 17, color: c.foreground }]}>{hide ? HIDDEN : !sync.complete ? t('Pending') : compactXmr(available, state.rateCents ? BigInt(state.rateCents) : null)}</Text>
+              <Text style={[st.num, { fontSize: 13.5, color: c.mutedForeground }]}>{hide ? HIDDEN : !sync.complete ? '—' : fiat ?? '—'}</Text>
             </View>
           </View>
           <View style={st.profit}>
@@ -267,36 +270,39 @@ function Overview() {
             ) : null}
           </View>
         </Pressable>
-        {m ? (
-          <Text style={{ fontFamily: F.r, fontSize: 11, color: c.mutedForeground, marginTop: 8, textAlign: 'right' }}>
-            {t('Updated {time}', { time: updated })}{m.stale ? ` · ${t('Delayed')}` : ''}
-          </Text>
-        ) : null}
 
-        <View style={st.recentHead}>
+        <Pressable accessibilityRole="button" onPress={() => router.push('/activity')} style={st.recentHead}>
           <Text style={{ fontFamily: F.s, fontSize: 19, color: c.foreground }}>{t('Recent Activity')}</Text>
           <Pressable testID="see-all" onPress={() => router.push('/activity')} hitSlop={10} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Text style={{ fontFamily: F.s, color: c.foreground, fontSize: 15 }}>{t('See all')}</Text>
             <Feather name="arrow-right" size={15} color={c.foreground} />
           </Pressable>
-        </View>
+        </Pressable>
         <View style={{ marginTop: 12 }}>
-          {recent.length ? recent.map((t) => <TxRow key={t.id} tx={t} />) : (
-            <View style={{ backgroundColor: c.card, borderRadius: 20 }}>
+          {recent.length ? recent.map((t) => <TxRow key={t.id} tx={t} onPress={() => router.push('/activity')} />) : (
+            <Pressable testID="empty-activity-open" accessibilityRole="button" onPress={() => router.push('/activity')} style={{ backgroundColor: c.card, borderRadius: 20 }}>
               <EmptyState icon="inbox" title={t('No activity yet')} body={t('Incoming and outgoing transfers will appear here.')} />
-            </View>
+            </Pressable>
           )}
         </View>
 
         <View onLayout={setL('sync')} testID="sync-section" style={[st.syncCard, { backgroundColor: c.card }, target === 'sync' && st.raised]}>
-          {syncBody()}
+          <SyncDetails>{syncBody()}</SyncDetails>
         </View>
         {/* Scroll-content dim: absolute sibling above every normal sibling; only the raised original target sits above it. */}
         {touring ? <View testID="tour-dim" onStartShouldSetResponder={() => true} style={[StyleSheet.absoluteFill, { backgroundColor: DIM, zIndex: 10 }]} /> : null}
       </Animated.ScrollView>
       {tour === 'show' ? (
         <TourOverlay step={step} onCardHeight={(h) => setCardH((o) => (Math.abs(o - h) < 0.5 ? o : h))} busy={tourBusy} error={tourErr} onBack={() => setStep((n) => Math.max(0, n - 1))} onSkip={finishTour}
-          onNext={() => (step === TOUR.length - 1 ? finishTour() : setStep(step + 1))} />
+          onNext={() => {
+            if (step === TOUR.length - 1) { void finishTour(); return; }
+            if (TOUR[step].target !== 'exchanges') { setStep(step + 1); return; }
+            if (!wid || tourBusy) return;
+            setTourBusy(true);
+            void saveTutorialResume(wid, step + 1).then(() => {
+              setTour('idle'); router.push({ pathname: '/settings', params: { panel: 'exchanges', tour: '1' } });
+            }).catch(() => setTourErr(t('Could not save. Try again.'))).finally(() => setTourBusy(false));
+          }} />
       ) : tour === 'error' ? (
         <TourError onRetry={() => { setTour('idle'); setCheck((n) => n + 1); }} onDismiss={() => setTour('idle')} />
       ) : null}

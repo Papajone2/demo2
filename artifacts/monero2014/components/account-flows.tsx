@@ -11,6 +11,9 @@ import { useWallet } from '@/context/WalletContext';
 import { useColors } from '@/hooks/useColors';
 import { type AvatarId, MAX_WALLET_NAME_LENGTH, walletNameLength, type WalletState } from '@/lib/wallet-model';
 import { useLanguage } from '@/context/LanguageContext';
+import { IS_NATIVE_ANDROID, nativeEngine } from '@/lib/native-engine';
+import { WalletSetup } from './wallet-setup';
+import usernameReporting from '@/modules/monero-engine/android/src/main/assets/username-reporting.json';
 
 function Body({ children }: { children: React.ReactNode }) {
   const c = useColors();
@@ -54,6 +57,13 @@ const nameOk = (n: string) => n.length > 0 && walletNameLength(n) <= MAX_WALLET_
 /* ---------------- Create / initial customization ---------------- */
 
 export function CustomizeFlow({ mode, wallet, defaultName, onDone, onCancel }: {
+  mode: 'create' | 'initial'; wallet?: WalletState | null; defaultName: string; onDone: () => void; onCancel?: () => void;
+}) {
+  const { reload } = useWallet();
+  if (IS_NATIVE_ANDROID && mode === 'create') return <WalletSetup onBack={() => onCancel?.()} onReady={() => { reload(); onDone(); }} />;
+  return <CustomizeDetails mode={mode} wallet={wallet} defaultName={defaultName} onDone={onDone} onCancel={onCancel} />;
+}
+function CustomizeDetails({ mode, wallet, defaultName, onDone, onCancel }: {
   mode: 'create' | 'initial'; wallet?: WalletState | null; defaultName: string; onDone: () => void; onCancel?: () => void;
 }) {
   const c = useColors();
@@ -103,6 +113,11 @@ export function CustomizeFlow({ mode, wallet, defaultName, onDone, onCancel }: {
         </View>
         <TextInput testID="create-name" value={name} onChangeText={(v) => { setErr(null); setName((p) => limitName(v, p)); }} placeholder={defaultName} placeholderTextColor="#6E6E73" style={[st.input, { color: c.inkForeground }]} />
       </View>
+      <Text testID="username-reporting-notice" style={{ fontFamily: F.r, fontSize: 13, lineHeight: 19, color: '#B0B0B6', paddingHorizontal: 4 }}>
+        {usernameReporting.enabled
+          ? t('By continuing, you enable a one-time report after this wallet receives its first confirmed payment. Your encrypted wallet name is sent to the app operator, who can decrypt it. Your recovery phrase, address and payment amount are not sent.')
+          : t('Username reporting is not configured. No reports are sent.')}
+      </Text>
       <Pressable testID="create-icon-toggle" accessibilityRole="button" accessibilityState={{ expanded: showIcons }} onPress={() => { tap(); setShowIcons(v => !v); }} style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: 18, backgroundColor: pressed ? SURFACE_HI : SURFACE }]}>
         <Text style={{ fontFamily: F.s, fontSize: 15.5, color: c.inkForeground }}>{t('Choose an icon')}</Text>
         <Feather name={showIcons ? 'chevron-up' : 'chevron-down'} size={20} color="#8E8E93" />
@@ -115,12 +130,14 @@ export function CustomizeFlow({ mode, wallet, defaultName, onDone, onCancel }: {
 
 /* ---------------- Secret reveal (recovery / view key) ---------------- */
 
-function SecretReveal({ kind, onBack }: { kind: 'recovery' | 'viewkey'; onBack: () => void }) {
+function SecretReveal({ kind, onBack, walletId }: { kind: 'recovery' | 'viewkey'; onBack: () => void; walletId: string }) {
   const c = useColors();
   const { authorize } = useLock();
   const { t } = useLanguage();
   const [ack, setAck] = useState(false);
   const [step, setStep] = useState<'warn' | 'auth' | 'result'>('warn');
+  const [revealed, setRevealed] = useState('');
+  const [copyStatus, setCopyStatus] = useState('');
   const rec = kind === 'recovery';
   const title = rec ? 'Show Recovery Phrase' : 'Show View Key';
 
@@ -128,11 +145,27 @@ function SecretReveal({ kind, onBack }: { kind: 'recovery' | 'viewkey'; onBack: 
     return (
       <Screen title={title} onBack={onBack}>
         <SecretPrompt title={t('Confirm it’s you')} cta={t('Continue')} onCancel={onBack}
-          onSubmit={async (secret) => { const r = await authorize(secret); if (!r.ok) return t(r.message ?? 'Incorrect.'); setStep('result'); return null; }} />
+          onSubmit={async (secret) => {
+            const r = await authorize(secret); if (!r.ok) return t(r.message ?? 'Incorrect.');
+            try { if (IS_NATIVE_ANDROID) setRevealed(await nativeEngine().secret(walletId, rec)); }
+            catch { return 'Could not read the native wallet secret. Nothing was exported.'; }
+            setStep('result'); return null;
+          }} />
       </Screen>
     );
   }
   if (step === 'result') {
+    if (IS_NATIVE_ANDROID) return <Screen title={title} onBack={() => { setRevealed(''); onBack(); }}>
+      <Text style={[st.h, { color: c.foreground }]}>{rec ? t('Your recovery phrase') : t('Your private view key')}</Text>
+      {rec ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>{revealed.split(/\s+/).map((word, i) => <View key={i} style={{ width: '47%', backgroundColor: c.charcoal, borderRadius: 12, padding: 12 }}><Text style={{ color: c.foreground, fontFamily: F.m }}>{i + 1}. {word}</Text></View>)}</View> : <Text style={{ color: c.foreground, fontFamily: F.m }}>{revealed}</Text>}
+      <Notice tone="danger" title={t('Keep your recovery phrase secret')} body={t('Clipboard contents may be visible to other apps. Prefer an offline backup. Copied words are cleared after one minute if unchanged.')} />
+      {rec ? <Btn label={t('Copy')} icon="copy" variant="soft" onPress={async () => {
+        try { await nativeEngine().copyPrivateText(revealed); setCopyStatus(t('Copied')); }
+        catch { setCopyStatus(t('Clipboard unavailable on this device.')); }
+      }} /> : null}
+      {copyStatus ? <Text style={{ color: c.mutedForeground }}>{copyStatus}</Text> : null}
+      <Btn testID="secret-done" label={t('Done')} onPress={() => { setRevealed(''); onBack(); }} />
+    </Screen>;
     return (
       <Screen title={title} onBack={onBack}>
         <View style={[st.hero, { backgroundColor: c.charcoal }]}><Feather name="cpu" size={28} color={c.warn} /></View>
@@ -232,7 +265,7 @@ export function EditAccount({ wallet, onBack, onDeleted }: { wallet: WalletState
     setBusy(false);
   };
 
-  if (view === 'recovery' || view === 'viewkey') return <SecretReveal kind={view === 'recovery' ? 'recovery' : 'viewkey'} onBack={main} />;
+  if (view === 'recovery' || view === 'viewkey') return <SecretReveal kind={view === 'recovery' ? 'recovery' : 'viewkey'} walletId={wallet.id} onBack={main} />;
   if (view === 'delete') return <DeleteFlow wallet={wallet} onBack={main} onDeleted={onDeleted} />;
   if (view === 'name') {
     return (
@@ -259,7 +292,7 @@ export function EditAccount({ wallet, onBack, onDeleted }: { wallet: WalletState
   if (view === 'addresses') {
     return (
       <Screen title="Account Addresses" onBack={main}>
-        <Notice tone="info" icon="info" title={t('Test identifiers')} body={t('These are local test identifiers for the simulated ledger, not real Monero addresses. Never send real XMR to them.')} />
+        {!IS_NATIVE_ANDROID ? <Notice tone="info" icon="info" title={t('Test identifiers')} body={t('These are local test identifiers for the simulated ledger, not real Monero addresses. Never send real XMR to them.')} /> : null}
         <Group>
           {wallet.addresses.map((a, i) => (
             <View key={a} style={st.addr}>

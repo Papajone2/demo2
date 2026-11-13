@@ -6,7 +6,7 @@ import { F, tap, useInsets } from '@/components/ui';
 import { msg, useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
 
-const BODY = msg('There is no way to recover a forgotten PIN or password. You can erase this device\u2019s sandbox wallet and lock, then start over.');
+const BODY = msg('A forgotten PIN or password cannot be recovered. Erasing removes the wallets and app lock from this device. You will need your recovery phrase to restore access.');
 
 /** Two-step bottom sheet for "Forgot PIN/password". Cancel at any point leaves all data untouched. */
 export function EraseSheet({ visible, label, onCancel, onErase }: { visible: boolean; label: string; onCancel: () => void; onErase: () => Promise<void> }) {

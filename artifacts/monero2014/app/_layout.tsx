@@ -21,6 +21,7 @@ import {
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -49,9 +50,9 @@ function RootLayoutNav() {
       <Stack.Screen name="market" options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
       <Stack.Screen name="send" options={{ title: t('Send'), presentation: 'modal' }} />
       <Stack.Screen name="receive" options={{ title: t('Receive'), presentation: 'modal' }} />
-      <Stack.Screen name="test" options={{ title: t('Testing hub') }} />
+      <Stack.Screen name="test" options={{ title: IS_NATIVE_ANDROID ? t('Monero Wallet') : t('Testing hub') }} />
       <Stack.Screen name="tx/[id]" options={{ title: t('Transaction') }} />
-      <Stack.Screen name="engine" options={{ title: t('Real wallets') }} />
+      <Stack.Screen name="engine" options={{ title: t('Nodes & Tor') }} />
     </Stack>
   );
 }

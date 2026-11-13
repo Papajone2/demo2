@@ -3,19 +3,25 @@ import * as WebBrowser from 'expo-web-browser';
 import { Stack } from 'expo-router';
 import React from 'react';
 import { ScrollView, Text, View } from 'react-native';
-import { SITE } from '@/components/LockGate';
+import { WEBSITE_LINKS } from '@/lib/external-links';
 import { Btn, Card, F, s as ui, useInsets } from '@/components/ui';
 import { msg, useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
+import { NodeSettings } from '@/components/node-settings';
 
 const POINTS: { icon: keyof typeof Feather.glyphMap; title: string; body: string }[] = [
   { icon: 'cpu', title: msg('Native engine required'), body: msg('Real Monero wallets need the native wallet2 library to derive keys, scan outputs and sign transactions. Expo Go cannot load it, so this build has no real wallet engine.') },
   { icon: 'globe', title: msg('Mainnet cannot be enabled'), body: msg('There is no switch for mainnet because nothing here could safely send or receive real XMR. Real addresses are rejected in Send.') },
   { icon: 'key', title: msg('16-word Polyseed'), body: msg('Creating or restoring a real wallet uses a 16-word Polyseed phrase. That requires the native engine; this preview does not generate, display or accept seeds. Never enter a real seed here.') },
-  { icon: 'layers', title: msg('Sync, honestly'), body: msg('A real wallet scans the chain with your view key. First sync can be slow, a restore height shortens it, and balances are unreliable until caught up. This sandbox does not sync.') },
+  { icon: 'layers', title: msg('Sync, honestly'), body: msg('Sending is available once your wallet finishes scanning.') },
 ];
 
 export default function EngineScreen() {
+  if (IS_NATIVE_ANDROID) return <NodeSettings />;
+  return <PreviewEngineScreen />;
+}
+function PreviewEngineScreen() {
   const c = useColors();
   const ins = useInsets();
   const { t } = useLanguage();
@@ -32,7 +38,7 @@ export default function EngineScreen() {
           </View>
         </Card>
       ))}
-      <Btn label={t('Follow progress at monero2014.com')} icon="external-link" variant="ink" onPress={() => WebBrowser.openBrowserAsync(SITE).catch(() => {})} />
+      <Btn label={t('Follow progress at monero2014.com')} icon="external-link" variant="ink" onPress={() => WebBrowser.openBrowserAsync(WEBSITE_LINKS.home).catch(() => {})} />
     </ScrollView>
   );
 }

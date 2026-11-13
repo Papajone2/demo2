@@ -3,12 +3,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { F, tap, useInsets } from '@/components/ui';
 import { msg, useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
 
-export type TourTarget = 'send' | 'receive' | 'sync';
+export type TourTarget = 'send' | 'receive' | 'exchanges' | 'sync';
 export const TOUR: { target: TourTarget; icon: keyof typeof Feather.glyphMap; title: string; body: string }[] = [
   { target: 'send', icon: 'arrow-up-right', title: msg('Send'), body: msg('Pay an address. You review every detail before it goes.') },
   { target: 'receive', icon: 'arrow-down-left', title: msg('Receive'), body: msg('Show your address or QR code to get paid.') },
-  { target: 'sync', icon: 'refresh-cw', title: msg('Sync'), body: msg('Sending unlocks once the wallet is fully synced. Here the sync is simulated.') },
+  { target: 'exchanges', icon: 'repeat', title: msg('Get Monero'), body: msg('Open the exchange guide to learn how to swap other cryptocurrencies for Monero.') },
+  { target: 'sync', icon: 'refresh-cw', title: msg('Sync'), body: IS_NATIVE_ANDROID ? msg('Sending is available once your wallet finishes scanning.') : msg('Sending unlocks once the wallet is fully synced. Here the sync is simulated.') },
 ];
 
 const block = { onStartShouldSetResponder: () => true };
@@ -44,7 +46,7 @@ export function TourOverlay({ step, onCardHeight, onNext, onBack, onSkip, busy, 
               </Pressable>
             ) : null}
             <Pressable testID={last ? 'tour-done' : 'tour-next'} disabled={busy} onPress={() => { tap(); onNext(); }} style={({ pressed }) => [st.btn, { backgroundColor: c.primary, opacity: busy ? 0.6 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] }]}>
-              <Text style={{ fontFamily: F.s, color: c.primaryForeground }}>{last ? t('Done') : t('Next')}</Text>
+              <Text style={{ fontFamily: F.s, color: c.primaryForeground }}>{last ? t('Done') : s.target === 'exchanges' ? t('Open guide') : t('Next')}</Text>
             </Pressable>
           </View>
         </View>

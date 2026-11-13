@@ -56,10 +56,23 @@ export const CURRENCIES = [
   { code: 'EUR', symbol: '€' },
   { code: 'GBP', symbol: '£' },
   { code: 'CHF', symbol: 'CHF ' },
+  { code: 'INR', symbol: '₹' },
 ] as const;
 export type CurrencyCode = (typeof CURRENCIES)[number]['code'];
 export function currencySymbol(code: CurrencyCode) {
   return CURRENCIES.find((c) => c.code === code)?.symbol ?? '$';
+}
+
+/** At most about ten US cents of truncation for the compact balance.
+ * Exact atomic amounts are always retained on review and transaction details.
+ */
+export function compactXmr(atomic: bigint, rateCents: bigint | null) {
+  let decimals = 4;
+  if (rateCents && rateCents > 0n) {
+    decimals = 2;
+    while (decimals < 12 && rateCents > 10n * 10n ** BigInt(decimals)) decimals++;
+  }
+  return formatXmr(atomic, decimals, 2);
 }
 
 const MAINNET_LIKE = /^[48][1-9A-HJ-NP-Za-km-z]{90,110}$/;

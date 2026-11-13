@@ -1,0 +1,124 @@
+name: Native Android APK
+
+on:
+  push:
+    branches: [wallet-source, native-android-engine]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: "1"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_DOMAIN: ${{ vars.API_DOMAIN }}
+      GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.22.1"
+          cache: pnpm
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck and regression tests
+        run: |
+          pnpm exec tsc --build lib/api-client-react
+          pnpm --filter @workspace/monero2014 run typecheck
+          node --experimental-strip-types --test artifacts/monero2014/lib/*.test.mjs
+          python3 -m unittest discover -s scripts/tests -v
+      - name: Fetch checksum-pinned native Monero engine
+        run: python3 scripts/fetch-monero-engine.py
+      - name: Generate Android project with local Expo module
+        working-directory: artifacts/monero2014
+        run: pnpm exec expo prebuild --platform android --clean --no-install
+      - name: Compile standalone test-signed APK with bundled application
+        working-directory: artifacts/monero2014/android
+        run: |
+          ./gradlew :app:assembleRelease \
+            -PreactNativeArchitectures=arm64-v8a,x86_64 \
+            -Pandroid.enableMinifyInReleaseBuilds=false \
+            --no-daemon --max-workers=2 --stacktrace
+      - name: Verify APK contents, signature and checksums
+        run: |
+          mkdir -p generated-artifacts/native-android
+          cp artifacts/monero2014/android/app/build/outputs/apk/release/app-release.apk generated-artifacts/native-android/monero2014-wallet.apk
+          python3 scripts/check-android-apk.py generated-artifacts/native-android/monero2014-wallet.apk
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify generated-artifacts/native-android/monero2014-wallet.apk
+          cp artifacts/monero2014/NATIVE-WALLET.md generated-artifacts/native-android/
+          cp artifacts/monero2014/modules/monero-engine/THIRD-PARTY.md generated-artifacts/native-android/
+          cp artifacts/monero2014/lib/MNEMONIC-NOTICES.txt generated-artifacts/native-android/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: monero2014-wallet-apk-${{ github.run_number }}
+          path: generated-artifacts/native-android/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Explain native build scope
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Installable native Android APK
+          Download **monero2014-wallet-apk** under this run's Artifacts, unzip,
+          and install `monero2014-wallet.apk` on Android 8+ (ARM64 or x86_64).
+          It includes the native Monero engine, JNA bridge and bundled frontend;
+          it does not require Expo Go or Metro.
+
+          **Experimental mainnet/stagenet, signed with an Android development key.**
+          This is not a production release or an audited wallet.
+          Existing stagenet wallets stay stagenet. Create a separate mainnet
+          wallet explicitly. Funded receipt/send testing remains unverified.
+          Do not risk valuable funds or enter a funded phrase in automated tests.
+          EOF
+      - name: Enable KVM for native engine instrumentation
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise real engine on Android emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          working-directory: artifacts/monero2014/android
+          script: |
+            ./gradlew :monero-engine:connectedDebugAndroidTest -PreactNativeArchitectures=x86_64 --no-daemon --max-workers=2 --stacktrace
+            adb logcat -d -s WalletTests:I '*:S' | tee "$GITHUB_WORKSPACE/generated-artifacts/native-android/native-pin-timing.txt"
+            adb install -r app/build/outputs/apk/release/app-release.apk
+            adb shell am start -n com.monero2014.wallet.stagenet/.MainActivity
+            sleep 15
+            adb shell pidof com.monero2014.wallet.stagenet
+            adb exec-out screencap -p > "$GITHUB_WORKSPACE/generated-artifacts/native-android/native-launch.png"
+      - name: Upload fresh-install launch evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-launch-evidence
+          path: |
+            generated-artifacts/native-android/native-launch.png
+            generated-artifacts/native-android/native-pin-timing.txt
+          if-no-files-found: error
+      - name: Upload native instrumentation reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-engine-tests
+          path: artifacts/monero2014/modules/monero-engine/android/build/reports/androidTests/
+          if-no-files-found: ignore

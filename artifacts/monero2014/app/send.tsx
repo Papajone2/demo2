@@ -1,3 +1,5 @@
+import { IS_NATIVE_ANDROID } from '@/lib/native-engine';
+import { NativeSend } from '@/components/native-send';
 import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { router, Stack } from 'expo-router';
@@ -114,7 +116,7 @@ function Send() {
         autoCorrect={false}
         mono
         error={errs.addr}
-        hint={t('Real Monero addresses are rejected in the sandbox.')}
+        hint={t('Real Monero addresses are not supported in the preview.')}
       />
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Pressable testID="send-paste" style={[st.mini, { backgroundColor: c.charcoal }]} onPress={async () => { try { const v = await Clipboard.getStringAsync(); setAddr(v.trim()); } catch { setErrs({ addr: t('Clipboard unavailable on this device.') }); } }}>
@@ -154,6 +156,7 @@ function Line({ k, v, sub, mono, strong, testID }: { k: string; v: string; sub?:
 }
 
 export default function SendScreen() {
+  if (IS_NATIVE_ANDROID) return <WalletGate><NativeSend /></WalletGate>;
   return (
     <WalletGate>
       <Send />

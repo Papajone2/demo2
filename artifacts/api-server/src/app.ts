@@ -4,6 +4,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import moneroRouter from "./routes/monero";
+import usernameReportRouter from "./routes/username-report";
 
 const app: Express = express();
 
@@ -28,6 +29,7 @@ app.use(
 );
 app.use(cors());
 app.use("/api", moneroRouter);
+app.use("/api", usernameReportRouter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

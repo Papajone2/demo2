@@ -24,7 +24,6 @@ export function FirstRunCustomize({ children }: { children: React.ReactNode }) {
 }
 
 const PIN_LEN = 4;
-export const SITE = 'https://monero2014.com';
 
 function useShake() {
   const x = useRef(new Animated.Value(0)).current;

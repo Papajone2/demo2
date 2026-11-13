@@ -78,7 +78,7 @@ router.get("/monero/price", async (req, res): Promise<void> => {
 type History = ReturnType<typeof parseMoneroHistory>;
 const historyCache = new Map<string, { value: History; at: number }>();
 const historyPending = new Map<string, Promise<History>>();
-async function history(currency: "usd" | "eur" | "gbp", range: HistoryRange): Promise<History> {
+async function history(currency: "usd" | "eur" | "gbp" | "inr" | "chf", range: HistoryRange): Promise<History> {
   const key = `${currency}:${range}`;
   const cached = historyCache.get(key);
   if (cached && Date.now() - cached.at < 60000) return cached.value;
@@ -113,7 +113,7 @@ router.get("/monero/history", async (req, res): Promise<void> => {
 type Stats = ReturnType<typeof parseMoneroStats>;
 const statsCache = new Map<string, { value: Stats; at: number }>();
 const statsPending = new Map<string, Promise<Stats>>();
-async function stats(currency: "usd" | "eur" | "gbp"): Promise<Stats> {
+async function stats(currency: "usd" | "eur" | "gbp" | "inr" | "chf"): Promise<Stats> {
   const cached = statsCache.get(currency);
   if (cached && Date.now() - cached.at < 5 * 60000) return cached.value;
   const pending = statsPending.get(currency);

@@ -14,7 +14,7 @@ const PERIOD_BOUNDS: Record<HistoryRange, [number, number]> = {
  * Validate provider observations without manufacturing or smoothing history.
  * Epoch milliseconds are retained, including irregular observation intervals.
  */
-export function parseMoneroHistory(raw: unknown, currency: "usd" | "eur" | "gbp", now = Date.now(), range: HistoryRange = "1d") {
+export function parseMoneroHistory(raw: unknown, currency: "usd" | "eur" | "gbp" | "inr" | "chf", now = Date.now(), range: HistoryRange = "1d") {
   const rows = (raw as { prices?: unknown } | null)?.prices;
   if (!Array.isArray(rows) || rows.length < 2 || rows.length > 5000) {
     throw new Error("Market history is incomplete");

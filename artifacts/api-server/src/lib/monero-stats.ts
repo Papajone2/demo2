@@ -1,6 +1,6 @@
 import { GetMoneroStatsResponse } from "@workspace/api-zod";
 
-type Currency = "usd" | "eur" | "gbp";
+type Currency = "usd" | "eur" | "gbp" | "inr" | "chf";
 const numberOrNull = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 

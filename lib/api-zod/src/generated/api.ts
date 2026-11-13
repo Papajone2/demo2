@@ -14,7 +14,7 @@ import * as zod from 'zod';
 export const getMoneroStatsQueryCurrencyDefault = `usd`;
 
 export const GetMoneroStatsQueryParams = zod.object({
-  "currency": zod.enum(['usd', 'eur', 'gbp']).default(getMoneroStatsQueryCurrencyDefault)
+  "currency": zod.enum(['usd', 'eur', 'gbp', 'inr', 'chf']).default(getMoneroStatsQueryCurrencyDefault)
 })
 
 export const GetMoneroStatsResponse = zod.object({
@@ -35,7 +35,7 @@ export const getMoneroHistoryQueryCurrencyDefault = `usd`;
 export const getMoneroHistoryQueryRangeDefault = `1d`;
 
 export const GetMoneroHistoryQueryParams = zod.object({
-  "currency": zod.enum(['usd', 'eur', 'gbp']).default(getMoneroHistoryQueryCurrencyDefault),
+  "currency": zod.enum(['usd', 'eur', 'gbp', 'inr', 'chf']).default(getMoneroHistoryQueryCurrencyDefault),
   "range": zod.enum(['1h', '1d', '1w', '1m', '1y']).default(getMoneroHistoryQueryRangeDefault)
 })
 
@@ -48,7 +48,7 @@ export const getMoneroHistoryResponsePriceExclusiveMin = 0;
 
 
 export const GetMoneroHistoryResponse = zod.object({
-  "currency": zod.enum(['usd', 'eur', 'gbp']),
+  "currency": zod.enum(['usd', 'eur', 'gbp', 'inr', 'chf']),
   "points": zod.array(zod.object({
   "timestamp": zod.number(),
   "price": zod.number().gt(getMoneroHistoryResponsePointsItemPriceExclusiveMin)
@@ -68,7 +68,7 @@ export const GetMoneroHistoryResponse = zod.object({
 export const getMoneroPriceQueryCurrencyDefault = `usd`;
 
 export const GetMoneroPriceQueryParams = zod.object({
-  "currency": zod.enum(['usd', 'eur', 'gbp']).default(getMoneroPriceQueryCurrencyDefault)
+  "currency": zod.enum(['usd', 'eur', 'gbp', 'inr', 'chf']).default(getMoneroPriceQueryCurrencyDefault)
 })
 
 export const GetMoneroPriceResponse = zod.object({

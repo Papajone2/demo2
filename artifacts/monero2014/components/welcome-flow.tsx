@@ -26,8 +26,8 @@ export function Onboarding({ start = 0, onDone, onExit, showLanguage }: { start?
     return <OnboardSlide testID="onboard-slide-1" active={0} onDot={setI} onNext={() => setI(1)} topRight={showLanguage ? <LanguageButton /> : undefined}
       title={accent(t('Welcome to\n[Monero] Wallet'), c.primary)} body={t('A simple and secure wallet\nfor Monero.')} />;
   if (i === 1)
-    return <OnboardSlide testID="onboard-slide-2" active={1} onDot={setI} onNext={() => setI(2)}
+    return <OnboardSlide testID="onboard-slide-2" active={1} onDot={setI} onNext={() => setI(2)} topRight={showLanguage ? <LanguageButton /> : undefined}
       title={accent(t('Your keys.\nYour [Monero.]'), c.primary)} body={t('Your wallet is protected by a\nprivate recovery phrase. Keep it\nsafe and never share it.')} />;
-  return <OnboardSlide testID="onboard-slide-3" active={2} onDot={setI} onNext={onDone}
+  return <OnboardSlide testID="onboard-slide-3" active={2} onDot={setI} onNext={onDone} topRight={showLanguage ? <LanguageButton /> : undefined}
     title={accent(t('A quick sync,\n[then you’re in.]'), c.primary)} body={t('Your wallet needs to sync with\nthe Monero network to show your\nlatest balance and transactions.')} />;
 }

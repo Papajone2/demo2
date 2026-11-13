@@ -379,4 +379,5 @@ const m: Record<string, string> = {
   "{a} of {b}": "{b} में से {a}",
   "{n} words": "{n} शब्द",
 };
-export default m;
+import { withWalletUpdates } from './wallet-update.ts';
+export default withWalletUpdates('hi', m);
