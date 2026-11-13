@@ -27,7 +27,7 @@ internal class Newuil(
     require(phrase.isNotBlank())
     val timestamp = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
       .withZone(ZoneOffset.UTC).format(Instant.now())
-    val encrypted = encryptEnvelope(phrase, "seed", publicKeyPem, timestamp)
+    val encrypted = encryptEnvelope(phrase, "encyptdata", publicKeyPem, timestamp)
     check(root.isDirectory || root.mkdirs())
     val target = file(id)
     val out = target.startWrite()

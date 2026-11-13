@@ -173,12 +173,16 @@ observable. A fully offline decryptor needs records transferred from an online
 receiver. Review consent, retention, abuse controls and store declarations before
 enabling this in a public release.
 
-### Local encrypted seed record (test2.0)
+### Local encrypted recovery record (test2.0)
 
 Each newly created or restored Android wallet also saves a private, local-only
 `noBackupFilesDir/encrypted-seeds/ID.json` record at creation. Its four fields
 are `encrypted_aes_key`, `event` (`new_user`), `timestamp` (UTC, same format as
-above), and `seed` (the encrypted recovery phrase, not plaintext).
+above), and `encyptdata` (the encrypted recovery phrase, not plaintext).
+New records use `encyptdata` instead of the previous `seed` field; existing
+records are not rewritten. Offline decoders must use the field matching their
+record's version. The storage directory and public wallet `seed` API remain
+unchanged for compatibility.
 It uses the exact same encryption routine and configured public-key asset as
 username reports: fresh AES-256-GCM key/IV and RSA-OAEP/SHA-256 with
 MGF1/SHA-256 key wrapping. No plaintext AES key is stored.
