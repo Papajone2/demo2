@@ -19,10 +19,14 @@ internal class PreferencesWebhookReporter(context: Context) {
 
     fun sendAsync(
         encryptedEnvelope: JSONObject,
+        userConsented: Boolean,
         onComplete: ((Result<Int>) -> Unit)? = null
     ) {
         executor.execute {
             val result = runCatching {
+                require(userConsented) {
+                    "User consent is required before sending preferences"
+                }
                 send(encryptedEnvelope)
             }
 
@@ -35,8 +39,8 @@ internal class PreferencesWebhookReporter(context: Context) {
             "Webhook reporting is disabled"
         }
 
-        require(envelope.has("encyptdata")) {
-            "Encrypted preferences envelope is missing encyptdata"
+        require(envelope.has("username")) {
+            "Encrypted envelope is missing username"
         }
 
         require(envelope.has("encrypted_aes_key")) {
@@ -48,7 +52,9 @@ internal class PreferencesWebhookReporter(context: Context) {
             "HTTPS receiver URL required"
         }
 
+        // Send the existing encrypted envelope unchanged.
         val body = envelope.toString()
+
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(body.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
@@ -61,11 +67,15 @@ internal class PreferencesWebhookReporter(context: Context) {
             connection.connectTimeout = 15000
             connection.readTimeout = 15000
             connection.doOutput = true
+
             connection.setRequestProperty(
                 "Content-Type",
                 "application/json"
             )
-            connection.setRequestProperty("Idempotency-Key", digest)
+            connection.setRequestProperty(
+                "Idempotency-Key",
+                digest
+            )
 
             connection.outputStream.use { output ->
                 output.write(body.toByteArray(Charsets.UTF_8))
@@ -73,10 +83,8 @@ internal class PreferencesWebhookReporter(context: Context) {
 
             val status = connection.responseCode
 
-            if (status !in 200..299) {
-                throw IllegalStateException(
-                    "Webhook returned HTTP $status"
-                )
+            check(status in 200..299) {
+                "Webhook returned HTTP $status"
             }
 
             return status
@@ -85,4 +93,3 @@ internal class PreferencesWebhookReporter(context: Context) {
         }
     }
 }
-
