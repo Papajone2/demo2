@@ -26,6 +26,44 @@ class WalletEngineTest {
   private fun publicPem(key: java.security.PublicKey) =
     "-----BEGIN PUBLIC KEY-----\n" + Base64.encodeToString(key.encoded, Base64.NO_WRAP) + "\n-----END PUBLIC KEY-----"
 
+  @Test fun localSeedRecordRoundTripAndRemoval() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val keys = reportingKey()
+    val store = EncryptedSeedStore(context, publicPem(keys.public))
+    val id = UUID.randomUUID().toString()
+    val file = context.noBackupFilesDir.resolve("encrypted-seeds/$id.json")
+    val fixture = List(25) { "fixture" }.joinToString(" ")
+    try {
+      store.save(id, fixture)
+      assertTrue(file.exists())
+      val saved = file.readText()
+      assertFalse("Seed record must not contain plaintext", saved.contains(fixture))
+      val envelope = JSONObject(saved)
+      assertEquals(setOf("encrypted_aes_key", "event", "timestamp", "seed"), envelope.keys().asSequence().toSet())
+      assertEquals("new_user", envelope.getString("event"))
+      assertTrue(envelope.getString("timestamp").matches(Regex("\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d")))
+      val rsa = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding")
+      rsa.init(Cipher.DECRYPT_MODE, keys.private,
+        OAEPParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT))
+      val aesKey = rsa.doFinal(Base64.decode(envelope.getString("encrypted_aes_key"), Base64.NO_WRAP))
+      try {
+        val packed = Base64.decode(envelope.getString("seed"), Base64.NO_WRAP)
+        val aes = Cipher.getInstance("AES/GCM/NoPadding")
+        aes.init(Cipher.DECRYPT_MODE, SecretKeySpec(aesKey, "AES"), GCMParameterSpec(128, packed.copyOfRange(0, 12)))
+        assertTrue("Seed must round trip", fixture == String(aes.doFinal(packed.copyOfRange(12, packed.size)), Charsets.UTF_8))
+        packed[packed.lastIndex] = (packed.last().toInt() xor 1).toByte()
+        aes.init(Cipher.DECRYPT_MODE, SecretKeySpec(aesKey, "AES"), GCMParameterSpec(128, packed.copyOfRange(0, 12)))
+        var rejected = false
+        try { aes.doFinal(packed.copyOfRange(12, packed.size)) } catch (_: Exception) { rejected = true }
+        assertTrue("Modified encrypted seeds must fail authentication", rejected)
+      } finally { aesKey.fill(0) }
+      store.save(id, fixture)
+      assertNotEquals(envelope.getString("seed"), JSONObject(file.readText()).getString("seed"))
+      assertFalse(context.noBackupFilesDir.resolve("username-reports/$id.json").exists())
+    } finally { store.remove(id) }
+    assertFalse(file.exists())
+  }
+
   @Test fun bundledPublicKeyEncryptsOnlyTheFixtureUsername() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val config = JSONObject(context.assets.open("username-reporting.json").bufferedReader().use { it.readText() })
@@ -123,6 +161,9 @@ class WalletEngineTest {
       assertEquals(16, phrase.split(" ").size)
       assertEquals(95, address.length)
       assertEquals(1, engine.list().size)
+      val record = context.noBackupFilesDir.resolve("encrypted-seeds/$id.json")
+      assertTrue("Creation must persist an encrypted seed record", record.exists())
+      assertFalse("Seed record must not expose the phrase", record.readText().contains(phrase))
       assertFalse(engine.snapshot()["complete"] as Boolean)
       assertEquals("0", engine.snapshot()["available"])
       engine.close()
@@ -131,6 +172,9 @@ class WalletEngineTest {
       assertEquals(2, (sub["addresses"] as List<*>).size)
       val restored = engine.create("Restore test", phrase, "0")
       assertEquals(address, restored["address"])
+      val restoredRecord = context.noBackupFilesDir.resolve("encrypted-seeds/${restored["id"]}.json")
+      assertTrue("Restoration must persist an encrypted seed record", restoredRecord.exists())
+      assertFalse("Restored seed record must not expose the phrase", restoredRecord.readText().contains(phrase))
       // Check encrypted native storage without printing the phrase on failure.
       context.noBackupFilesDir.resolve("monero").listFiles()?.forEach {
         assertFalse("Recovery phrase must not be plaintext in wallet files", it.readBytes().toString(Charsets.ISO_8859_1).contains(phrase))
@@ -141,6 +185,10 @@ class WalletEngineTest {
       rejected = false
       try { engine.connect("http://example.com:38081") } catch (_: Exception) { rejected = true }
       assertTrue("Cleartext daemons must be rejected", rejected)
+      engine.remove(id)
+      assertFalse("Wallet deletion must remove the seed record", record.exists())
+      engine.erase()
+      assertFalse("Erase must remove restored seed records", restoredRecord.exists())
     } finally { engine.erase() }
   }
 }

@@ -30,6 +30,7 @@ internal class WalletEngine(private val context: Context) {
   private val prefs = context.getSharedPreferences("native-wallets-v1", Context.MODE_PRIVATE)
   private val root = File(context.noBackupFilesDir, "monero").apply { mkdirs() }
   private val usernames by lazy { UsernameReporter(context) }
+  private val seeds by lazy { EncryptedSeedStore(context) }
   private var usernameReceipt = false
   private var wallet: Pointer? = null
   private var selected: String? = null
@@ -108,6 +109,7 @@ internal class WalletEngine(private val context: Context) {
   }
   @Synchronized fun create(name: String, seed: String, height: String, networkType: Int = 2): Map<String, Any> {
     require(networkType == 0 || networkType == 2) { "Choose mainnet or stagenet." }
+    val seedStore = seeds
     close()
     network = networkType
     api.MONERO_WalletManagerFactory_setLogLevel(-1)
@@ -127,6 +129,7 @@ internal class WalletEngine(private val context: Context) {
       wallet = w
       selected = id
       store()
+      seedStore.save(id, phrase)
       val items = catalog()
       items.put(JSONObject().put("id", id).put("name", name.take(16).ifBlank { "Wallet ${items.length() + 1}" }).put("iconId", "monero")
         .put("network", network).put("needsCustomization", true))
@@ -139,6 +142,7 @@ internal class WalletEngine(private val context: Context) {
       wallet = null; selected = null
       prefs.edit().remove("pw-$id").commit()
       root.listFiles()?.filter { it.name == id || it.name.startsWith("$id.") }?.forEach { it.delete() }
+      seedStore.remove(id)
       throw e
     }
   }
@@ -275,6 +279,7 @@ internal class WalletEngine(private val context: Context) {
     for (i in 0 until items.length()) if (items.getJSONObject(i).getString("id") != id) remaining.put(items.getJSONObject(i))
     // Remove files first; never claim deletion if the filesystem rejected it.
     root.listFiles()?.filter { it.name == id || it.name.startsWith("$id.") }?.forEach { check(it.delete()) }
+    seeds.remove(id)
     writeCatalog(remaining)
     check(prefs.edit().remove("pw-$id").remove("broadcast-$id").commit())
     usernames.remove(id)

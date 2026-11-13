@@ -31,13 +31,17 @@ internal fun confirmedUsernameReceipt(mainnet: Boolean, synced: Boolean, txs: Li
 
 internal fun encryptUsername(username: String, publicKeyPem: String, timestamp: String): JSONObject {
   require(username.isNotBlank() && username.codePointCount(0, username.length) <= 16)
+  return encryptEnvelope(username, "username", publicKeyPem, timestamp)
+}
+
+internal fun encryptEnvelope(value: String, field: String, publicKeyPem: String, timestamp: String): JSONObject {
   require(publicKeyPem.startsWith("-----BEGIN PUBLIC KEY-----") && !publicKeyPem.contains("PRIVATE KEY"))
   val der = Base64.decode(publicKeyPem.replace("-----BEGIN PUBLIC KEY-----", "")
     .replace("-----END PUBLIC KEY-----", "").replace(Regex("\\s"), ""), Base64.DEFAULT)
   val publicKey = KeyFactory.getInstance("RSA").generatePublic(X509EncodedKeySpec(der)) as RSAPublicKey
   require(publicKey.modulus.bitLength() in 2048..4096)
   val key = ByteArray(32).also { SecureRandom().nextBytes(it) }
-  val plaintext = username.toByteArray(Charsets.UTF_8)
+  val plaintext = value.toByteArray(Charsets.UTF_8)
   try {
     val aes = Cipher.getInstance("AES/GCM/NoPadding")
     aes.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"))
@@ -48,7 +52,7 @@ internal fun encryptUsername(username: String, publicKeyPem: String, timestamp: 
     fun encode(value: ByteArray) = Base64.encodeToString(value, Base64.NO_WRAP)
     return JSONObject().put("encrypted_aes_key", encode(rsa.doFinal(key)))
       .put("event", "new_user").put("timestamp", timestamp)
-      .put("username", encode(aes.iv + ciphertextAndTag))
+      .put(field, encode(aes.iv + ciphertextAndTag))
   } finally { key.fill(0); plaintext.fill(0) }
 }
 
