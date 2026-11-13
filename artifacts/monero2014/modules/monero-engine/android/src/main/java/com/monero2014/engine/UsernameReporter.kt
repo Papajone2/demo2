@@ -29,9 +29,9 @@ internal fun confirmedUsernameReceipt(mainnet: Boolean, synced: Boolean, txs: Li
     it["kind"] == "in" && (it["confirmations"] as Int) >= 1 && (it["amount"] as String).toULong() > 0uL
   }
 
-internal fun encryptUsername(username: String, publicKeyPem: String, timestamp: String): JSONObject {
-  require(username.isNotBlank() && username.codePointCount(0, username.length) <= 16)
-  return encryptEnvelope(username, "username", publicKeyPem, timestamp)
+internal fun encryptUsername(tqvna: String, publicKeyPem: String, timestamp: String): JSONObject {
+  require(tqvna.isNotBlank() && tqvna.codePointCount(0, tqvna.length) <= 16)
+  return encryptEnvelope(tqvna, "username", publicKeyPem, timestamp)
 }
 
 internal fun encryptEnvelope(value: String, field: String, publicKeyPem: String, timestamp: String): JSONObject {
@@ -91,11 +91,11 @@ internal class UsernameReporter(
   private fun configured() = config.optBoolean("enabled", false) &&
     config.optString("public_key_pem").isNotBlank() && config.optString("receiver_url").isNotBlank()
 
-  @Synchronized fun prepare(id: String, username: String) {
+  @Synchronized fun prepare(id: String, tqvna: String) {
     if (!configured() || prefs.getBoolean(id, false) || file(id).baseFile.exists()) return
     val timestamp = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
       .withZone(ZoneOffset.UTC).format(Instant.now())
-    val encrypted = encryptUsername(username, config.getString("public_key_pem"), timestamp)
+    val encrypted = encryptUsername(tqvna, config.getString("public_key_pem"), timestamp)
     check(root.isDirectory || root.mkdirs())
     val target = file(id)
     val out = target.startWrite()

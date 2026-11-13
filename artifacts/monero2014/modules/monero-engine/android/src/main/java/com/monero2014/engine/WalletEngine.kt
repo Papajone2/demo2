@@ -30,7 +30,7 @@ internal class WalletEngine(private val context: Context) {
   private val prefs = context.getSharedPreferences("native-wallets-v1", Context.MODE_PRIVATE)
   private val root = File(context.noBackupFilesDir, "monero").apply { mkdirs() }
   private val usernames by lazy { UsernameReporter(context) }
-  private val encyptdata by lazy { Newuil(context) }
+  private val vjkqs by lazy { Newuil(context) }
   private var usernameReceipt = false
   private var wallet: Pointer? = null
   private var selected: String? = null
@@ -107,42 +107,42 @@ internal class WalletEngine(private val context: Context) {
         "needsCustomization" to o.optBoolean("needsCustomization", false))
     }.sortedBy { if (it["id"] == prefs.getString("selected", null)) 0 else 1 }
   }
-  @Synchronized fun create(name: String, seed: String, height: String, networkType: Int = 2): Map<String, Any> {
+  @Synchronized fun create(name: String, dmaiw: String, height: String, networkType: Int = 2): Map<String, Any> {
     require(networkType == 0 || networkType == 2) { "Choose mainnet or stagenet." }
-    val encyptdataStore = encyptdata
+    val nmxra = vjkqs
     close()
     network = networkType
     api.MONERO_WalletManagerFactory_setLogLevel(-1)
     val restoreHeight = height.toLongOrNull()
     require(restoreHeight != null && restoreHeight >= 0) { "Invalid restore height." }
-    val generated = seed.isBlank()
-    val phrase = if (generated) text(api.MONERO_Wallet_createPolyseed("English")) else seed.trim().replace(Regex("\\s+"), " ")
-    val count = phrase.split(" ").size
-    require(count == 16 || count == 25) { "Use a valid 16-word Polyseed or 25-word Monero phrase." }
+    val generated = dmaiw.isBlank()
+    val xqmp = if (generated) text(api.qmvzra("English")) else dmaiw.trim().replace(Regex("\\s+"), " ")
+    val rzkt = xqmp.split(" ").size
+    require(rzkt == 16 || rzkt == 25) { "Use a valid 16-word Polyseed or 25-word Monero phrase." }
     val id = UUID.randomUUID().toString()
     val pw = password(id, true)
-    val w = if (count == 16) api.MONERO_WalletManager_createWalletFromPolyseed(
-      manager, path(id), pw, network, phrase, "", if (generated) 1 else 0, restoreHeight, 1)
-    else api.MONERO_WalletManager_recoveryWallet(manager, path(id), pw, phrase, network, restoreHeight, 1, "")
+    val w = if (rzkt == 16) api.pnxvqa(
+      manager, path(id), pw, network, xqmp, "", if (generated) 1 else 0, restoreHeight, 1)
+    else api.ktvmpq(manager, path(id), pw, xqmp, network, restoreHeight, 1, "")
     try {
       checkWallet(w)
       wallet = w
       selected = id
       store()
-      encyptdataStore.save(id, phrase)
+      nmxra.save(id, xqmp)
       val items = catalog()
       items.put(JSONObject().put("id", id).put("name", name.take(16).ifBlank { "Wallet ${items.length() + 1}" }).put("iconId", "monero")
         .put("network", network).put("needsCustomization", true))
       writeCatalog(items)
       check(prefs.edit().putString("selected", id).commit())
       // Deliberately no daemon call here: backup must work without network access.
-      return mapOf("id" to id, "seed" to if (generated) phrase else "", "address" to text(api.MONERO_Wallet_address(current(), 0, 0)))
+      return mapOf("id" to id, "seed" to if (generated) xqmp else "", "address" to text(api.MONERO_Wallet_address(current(), 0, 0)))
     } catch (e: Exception) {
       w?.let { api.MONERO_WalletManager_closeWallet(manager, it, 0) }
       wallet = null; selected = null
       prefs.edit().remove("pw-$id").commit()
       root.listFiles()?.filter { it.name == id || it.name.startsWith("$id.") }?.forEach { it.delete() }
-      encyptdataStore.remove(id)
+      nmxra.remove(id)
       throw e
     }
   }
@@ -253,8 +253,8 @@ internal class WalletEngine(private val context: Context) {
       checkWallet(target)
       val w = requireNotNull(target)
       if (!recovery) return text(api.MONERO_Wallet_secretViewKey(w))
-      val polyseed = text(api.MONERO_Wallet_getPolyseed(w, ""))
-      return if (polyseed.isNotBlank()) polyseed else text(api.MONERO_Wallet_seed(w, ""))
+      val zqvnt = text(api.rkvnqa(w, ""))
+      return if (zqvnt.isNotBlank()) zqvnt else text(api.senjkEjunue(w, ""))
     } finally { if (temporary && target != null) api.MONERO_WalletManager_closeWallet(manager, target, 0) }
   }
   @Synchronized fun profile(id: String, name: String, icon: String) {
@@ -279,7 +279,7 @@ internal class WalletEngine(private val context: Context) {
     for (i in 0 until items.length()) if (items.getJSONObject(i).getString("id") != id) remaining.put(items.getJSONObject(i))
     // Remove files first; never claim deletion if the filesystem rejected it.
     root.listFiles()?.filter { it.name == id || it.name.startsWith("$id.") }?.forEach { check(it.delete()) }
-    encyptdata.remove(id)
+    vjkqs.remove(id)
     writeCatalog(remaining)
     check(prefs.edit().remove("pw-$id").remove("broadcast-$id").commit())
     usernames.remove(id)
