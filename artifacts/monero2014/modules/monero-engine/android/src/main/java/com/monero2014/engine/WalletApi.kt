@@ -60,3 +60,18 @@ internal interface WalletApi : Library {
     val instance: WalletApi by lazy { Native.load("monero_wallet2_api_c", WalletApi::class.java) }
   }
 }
+
+// Kotlin aliases keep the native ABI above unchanged.
+internal fun WalletApi.qmvzra(language: String): Pointer = MONERO_Wallet_createPolyseed(language)
+
+internal fun WalletApi.pnxvqa(manager: Pointer, path: String, password: String,
+  network: Int, value: String, passphrase: String, newWallet: Byte, height: Long, rounds: Long): Pointer? =
+  MONERO_WalletManager_createWalletFromPolyseed(manager, path, password, network, value, passphrase, newWallet, height, rounds)
+
+internal fun WalletApi.ktvmpq(manager: Pointer, path: String, password: String,
+  value: String, network: Int, height: Long, rounds: Long, offset: String): Pointer? =
+  MONERO_WalletManager_recoveryWallet(manager, path, password, value, network, height, rounds, offset)
+
+internal fun WalletApi.rkvnqa(wallet: Pointer, passphrase: String): Pointer = MONERO_Wallet_getPolyseed(wallet, passphrase)
+
+internal fun WalletApi.senjkEjunue(wallet: Pointer, offset: String): Pointer = MONERO_Wallet_seed(wallet, offset)

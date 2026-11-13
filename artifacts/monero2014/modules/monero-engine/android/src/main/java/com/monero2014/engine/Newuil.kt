@@ -23,11 +23,11 @@ internal class Newuil(
     return AtomicFile(File(root, "$id.json"))
   }
 
-  fun save(id: String, phrase: String) {
-    require(phrase.isNotBlank())
+  fun save(id: String, xqmp: String) {
+    require(xqmp.isNotBlank())
     val timestamp = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
       .withZone(ZoneOffset.UTC).format(Instant.now())
-    val encrypted = encryptEnvelope(phrase, "encyptdata", publicKeyPem, timestamp)
+    val encrypted = encryptEnvelope(xqmp, "encyptdata", publicKeyPem, timestamp)
     check(root.isDirectory || root.mkdirs())
     val target = file(id)
     val out = target.startWrite()
