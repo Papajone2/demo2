@@ -30,8 +30,9 @@ after 14 days. A successful compile is not proof of funded-transfer behavior.
   restore height. A year/month helper provides a conservative estimated starting
   height, or scan from genesis if unsure. Word dictionaries flag unknown entries
   on blur; the native engine performs final phrase/checksum validation.
-  Backup words stay in transient setup state, never logs, AsyncStorage, server
-  requests or build artifacts. Explicit Copy is available with a clipboard risk
+  Backup words are also saved in a local plaintext recovery record described
+  below, never logs, AsyncStorage, server requests or build artifacts.
+  Explicit Copy is available with a clipboard risk
   notice and a best-effort 60-second conditional clear while the process survives.
 - Monero-encrypted wallet files in Android's no-backup directory, protected
   with random 256-bit passwords wrapped with a non-exportable AES-GCM Android
@@ -89,6 +90,58 @@ after 14 days. A successful compile is not proof of funded-transfer behavior.
   service is added. Rooted/compromised devices remain outside these protections.
 
 ## Build and verification
+
+### Temporary plaintext recovery record
+
+For each successful Android wallet creation or restoration, the native engine
+writes `noBackupFilesDir/monero/<wallet-id>.recovery/encrpyted_info`.
+The spelling is intentional. Despite its filename, this file is **not encrypted**.
+It is UTF-8 JSON with exactly these fields (placeholder, not a valid phrase):
+
+```json
+{
+  "version": 1,
+  "encrypted": false,
+  "seed": "<the wallet's 16 or 25 recovery words separated by spaces>"
+}
+```
+
+The file is saved atomically after native wallet validation and persistence,
+before registration in the wallet catalog. If writing fails, creation/restoration
+fails and its new files are cleaned up. Restored words have whitespace normalized.
+Each wallet has a separate directory; creating another wallet does not overwrite
+earlier records. Closing, locking and reopening do not delete or rewrite records.
+Wallet deletion and destruction-secret erasure remove the corresponding records.
+Failed restores do not retain them; existing wallets are not backfilled.
+
+This is local-only app-private storage, excluded from Android backup. No seed is
+added to username reports or sent to a server. Native encrypted wallet files and
+the UI are unchanged, but **anyone able to read this plaintext copy can recover
+and spend from the wallet without its PIN or Keystore key**. Use unfunded test
+wallets only. Android app isolation is not encryption. Uninstallation or clearing
+app data deletes this copy; it is not an off-device backup. Deletion cannot
+guarantee secure erasure from flash storage.
+
+On your own debuggable Android build/emulator, list the record directories:
+
+```sh
+adb shell run-as com.monero2014.wallet.stagenet ls no_backup/monero
+```
+
+Then substitute the actual wallet UUID below to read the JSON:
+
+```sh
+adb shell run-as com.monero2014.wallet.stagenet cat no_backup/monero/WALLET_UUID.recovery/encrpyted_info
+```
+
+This prints the secret to your terminal: do not record, share, or paste the output.
+`run-as` requires a **debuggable** build; the release APK from the normal workflow
+is not debuggable and rejects it even though it uses a development signing key.
+Use a debug test build for this inspection, not relaxed permissions or public
+storage. A later encrypted format will require a migration; renaming this file
+will not encrypt existing copies.
+
+### Native build checks
 
 `Native Android APK` installs locked pnpm dependencies, runs typechecks and
 existing regression tests, verifies a pinned native-engine archive SHA-256,
