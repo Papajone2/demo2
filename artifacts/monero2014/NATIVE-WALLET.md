@@ -119,15 +119,18 @@ cd android
 
 ### Username-only reporting (1.3.2)
 
-Two new app files: `UsernameReporter.kt` in the engine's Java package and
-`modules/monero-engine/android/src/main/assets/username-reporting.json`.
-Edit the JSON directly in GitHub: `public_key_pem` is an SPKI PEM RSA public key
-(2048–4096 bits); `receiver_url` is your public HTTPS relay endpoint ending in
+Three app files: `UsernameReporter.kt` in the engine's Java package, plus
+`username-reporting.json` and `username-public.pem` in
+`modules/monero-engine/android/src/main/assets/`.
+Edit the PEM directly in GitHub to change the username-reporting public key:
+it is an SPKI PEM RSA public key (2048–4096 bits). The supplied 3072-bit public
+key is bundled; no private key is present. In the JSON, `public_key_file` selects
+that asset, while `receiver_url` is your public HTTPS relay endpoint ending in
 `/api/username-report`, without credentials/query parameters. Set `enabled`
-only after setup. Defaults are disabled/empty because no public key was supplied.
+only after setup. It remains false and the receiver URL is empty.
 Rebuild the APK after editing. No operator page or seed-key setting is added.
-In the JSON string, encode PEM line breaks as `\n`. Never put your private key,
-AES key or private webhook URL in this public file. The regression checks allow
+Never put your private key, AES key or private webhook URL in either public
+file. The regression checks allow
 valid custom public keys/relay URLs and reject an incomplete enabled setup.
 
 The existing API server's single new `src/routes/username-report.ts` relay keeps

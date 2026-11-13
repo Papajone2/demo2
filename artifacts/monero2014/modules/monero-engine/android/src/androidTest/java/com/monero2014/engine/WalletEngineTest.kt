@@ -26,6 +26,16 @@ class WalletEngineTest {
   private fun publicPem(key: java.security.PublicKey) =
     "-----BEGIN PUBLIC KEY-----\n" + Base64.encodeToString(key.encoded, Base64.NO_WRAP) + "\n-----END PUBLIC KEY-----"
 
+  @Test fun bundledPublicKeyEncryptsOnlyTheFixtureUsername() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val config = JSONObject(context.assets.open("username-reporting.json").bufferedReader().use { it.readText() })
+    val pem = context.assets.open(config.getString("public_key_file")).bufferedReader().use { it.readText() }
+    val envelope = encryptUsername("Name fixture", pem, "2026-11-03T09:44:15")
+    assertEquals(4, envelope.length())
+    assertTrue(Base64.decode(envelope.getString("encrypted_aes_key"), Base64.NO_WRAP).size in 256..512)
+    assertFalse(envelope.toString().contains("Name fixture"))
+  }
+
   @Test fun fourFieldUsernameEnvelopeRoundTripAndTamperDetection() {
     val keys = reportingKey()
     val envelope = encryptUsername("Name fixture", publicPem(keys.public), "2026-11-03T09:44:15")

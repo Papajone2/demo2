@@ -72,7 +72,9 @@ internal fun postUsername(receiver: String, body: String): Boolean {
 
 internal class UsernameReporter(
   context: Context,
-  private val config: JSONObject = JSONObject(context.assets.open("username-reporting.json").bufferedReader().use { it.readText() }),
+  private val config: JSONObject = JSONObject(context.assets.open("username-reporting.json").bufferedReader().use { it.readText() }).apply {
+    put("public_key_pem", context.assets.open(getString("public_key_file")).bufferedReader().use { it.readText() })
+  },
   private val send: (String, String) -> Boolean = ::postUsername,
 ) {
   private val root = File(context.noBackupFilesDir, "username-reports")

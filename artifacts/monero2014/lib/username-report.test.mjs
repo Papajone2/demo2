@@ -62,24 +62,23 @@ test('relay preserves the four fields and deduplicates acknowledged reports', as
 
 test('public config contains no secret and disclosure appears in one app location only', () => {
   const config = JSON.parse(source('../modules/monero-engine/android/src/main/assets/username-reporting.json'));
-  assert.deepEqual(Object.keys(config), ['enabled', 'public_key_pem', 'receiver_url']);
+  assert.deepEqual(Object.keys(config), ['enabled', 'public_key_file', 'receiver_url']);
   assert.equal(typeof config.enabled, 'boolean');
-  assert.equal(typeof config.public_key_pem, 'string');
+  assert.equal(typeof config.public_key_file, 'string');
+  assert.match(config.public_key_file, /^[a-zA-Z0-9._-]+\.pem$/);
   assert.equal(typeof config.receiver_url, 'string');
-  if (config.public_key_pem) {
-    assert.ok(config.public_key_pem.startsWith('-----BEGIN PUBLIC KEY-----'));
-    assert.ok(!config.public_key_pem.includes('PRIVATE KEY'));
-    const key = createPublicKey(config.public_key_pem);
-    assert.equal(key.asymmetricKeyType, 'rsa');
-    assert.ok(key.asymmetricKeyDetails.modulusLength >= 2048 && key.asymmetricKeyDetails.modulusLength <= 4096);
-  }
+  const publicPem = source('../modules/monero-engine/android/src/main/assets/' + config.public_key_file);
+  assert.ok(publicPem.startsWith('-----BEGIN PUBLIC KEY-----'));
+  assert.ok(!publicPem.includes('PRIVATE KEY'));
+  const key = createPublicKey(publicPem);
+  assert.equal(key.asymmetricKeyType, 'rsa');
+  assert.ok(key.asymmetricKeyDetails.modulusLength >= 2048 && key.asymmetricKeyDetails.modulusLength <= 4096);
   if (config.receiver_url) {
     const url = new URL(config.receiver_url);
     assert.equal(url.protocol, 'https:');
     assert.ok(!url.username && !url.password && !url.search && !url.hash);
   }
   if (config.enabled) {
-    assert.ok(config.public_key_pem, 'Enabled reporting requires a public key.');
     assert.ok(config.receiver_url, 'Enabled reporting requires a public relay URL.');
   }
   const screens = source('../components/account-flows.tsx');
